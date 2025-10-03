@@ -1,0 +1,4 @@
+# IDEA ignore list
+.idea
+
+node_modules

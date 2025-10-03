@@ -1,0 +1,27 @@
+{
+  "name": "@porotkin/vite-plugin-react-kotlinjs",
+  "version": "0.0.1",
+  "description": "Support React fast refresh in Kotlin/JS",
+  "license": "MIT",
+  "author": "Mikhail Porotkin",
+  "keywords": [
+    "vite-plugin-react-kotlinjs",
+    "react-refresh-kotlinjs"
+  ],
+  "files": [
+    "src"
+  ],
+  "type": "module",
+  "exports": "./src/index.js",
+  "scripts": {
+    "postinstall": "node copyRefreshRuntime.js"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.4",
+    "@rolldown/pluginutils": "1.0.0-beta.41",
+    "react-refresh": "^0.17.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.0.4"
+  }
+}
