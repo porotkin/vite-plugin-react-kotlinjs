@@ -1,4 +1,4 @@
-import {addRefreshWrapper} from "./refresh-wrapper";
+import {addRefreshWrapper} from "./refresh-wrapper.js";
 
 let babel;
 
@@ -9,7 +9,6 @@ async function loadBabel() {
 
 let isProduction = true;
 let projectRoot = process.cwd();
-let skipFastRefresh = true;
 let runPluginOverrides;
 
 function canSkipBabel(plugins, babelOptions) {
@@ -44,13 +43,13 @@ function createBabelOptions(rawOptions) {
     return babelOptions;
 }
 
-export default (options) => ({
+export const viteBabelPlugin = (mainOptions) => ({
     name: "vite:react-plugin-kotlinjs",
     enforce: "pre",
     configResolved(config) {
         projectRoot = config.root;
         isProduction = config.isProduction;
-        options.skipFastRefresh = isProduction || config.command === "build" || config.server.hmr === false;
+        mainOptions.skipFastRefresh = isProduction || config.command === "build" || config.server.hmr === false;
         const hooks = config.plugins.map((plugin) => plugin.api?.reactBabel).filter(function (value) {
             return value !== void 0;
         });
@@ -61,7 +60,7 @@ export default (options) => ({
     transform: {
         async handler(code, id, options) {
             const [filepath] = id.split("?");
-            if (!options?.filter(filepath)) return;
+            if (!mainOptions?.filter(filepath) || !mainOptions?.getComponentName(code)) return;
             const ssr = options?.ssr === true;
             const babelOptions = (() => {
                 const newBabelOptions = createBabelOptions({});
@@ -72,7 +71,7 @@ export default (options) => ({
                 return newBabelOptions;
             })();
             const plugins = [...babelOptions.plugins];
-            const useFastRefresh = !skipFastRefresh;
+            const useFastRefresh = !mainOptions.skipFastRefresh;
             if (useFastRefresh) plugins.push([await loadPlugin("react-refresh/babel"), {skipEnvCheck: true}]);
             if (canSkipBabel(plugins, babelOptions)) return;
             const parserPlugins = [...babelOptions.parserOpts.plugins];
@@ -103,7 +102,7 @@ export default (options) => ({
                     map: result.map
                 };
                 return {
-                    code: addRefreshWrapper(result.code, "@vitejs/plugin-react", id, options?.getComponentName) ?? result.code,
+                    code: addRefreshWrapper(result.code, "vite:react-plugin-kotlinjs", id, mainOptions?.getComponentName) ?? result.code,
                     map: result.map
                 };
             }

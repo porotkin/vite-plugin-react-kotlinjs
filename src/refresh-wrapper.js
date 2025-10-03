@@ -9,7 +9,7 @@ window.$RefreshSig$ = () => (type) => type;`
 export const getPreambleCode = () => preambleCode
 
 export function addRefreshWrapper(code, pluginName, id, getComponentName) {
-    const componentName = getComponentName?.(code) ?? code.match(/function ([A-Za-z]+)\$lambda\(\$this\$FC\) {/)?.[1]
+    const componentName = getComponentName?.(code)
     if (!componentName) return code;
 
     const registerHmr = `   

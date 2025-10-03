@@ -1,9 +1,9 @@
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {exactRegex} from '@rolldown/pluginutils'
-import {runtimePublicPath} from "./refresh-wrapper";
 import {readFileSync} from 'node:fs'
-import {silenceUseClientWarning} from "./warning";
+import {runtimePublicPath} from "./refresh-wrapper.js";
+import {silenceUseClientWarning} from "./warning.js";
 
 const _dirname = dirname(fileURLToPath(import.meta.url))
 const refreshRuntimePath = join(_dirname, 'refresh-runtime.js')
@@ -12,7 +12,7 @@ const dependencies = [
     'react-dom',
 ]
 
-export default (options) => ({
+export const viteReactRefreshPlugin = (options) => ({
     name: 'vite:react-refresh',
     enforce: 'pre',
     config: (userConfig) => ({
