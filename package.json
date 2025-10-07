@@ -4,6 +4,10 @@
   "description": "Support React fast refresh in Kotlin/JS",
   "license": "MIT",
   "author": "Mikhail Porotkin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/porotkin/vite-plugin-react-kotlinjs.git"
+  },
   "keywords": [
     "vite-plugin-react-kotlinjs",
     "react-refresh-kotlinjs"
