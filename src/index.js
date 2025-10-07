@@ -16,7 +16,7 @@ export default (options) => {
 
     const derivedOptions = {
         skipFastRefresh: true,
-        getComponentName: (code) => code.match(/function ([A-Za-z]+)\$lambda\(\$this\$FC\) {/)?.[1],
+        getComponentName: (code) => code.match(/function ([A-Za-z]+)\$lambda\(\$this\$FC(, props)?\) {/)?.[1],
         filter,
         ...options,
     };
