@@ -10,7 +10,7 @@ This plugin is inspired by the original
 Add the following dependency to your `build.gradle.kts`:
 ```kotlin
 dependencies {
-    jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^0.0.3"))
+    jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^0.0.4"))
 }
 ```
 
