@@ -8,11 +8,6 @@ window.$RefreshSig$ = () => (type) => type;`
 
 export const getPreambleCode = () => preambleCode
 
-function capitalize(str) {
-    if (!str) return '';
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
 export function addRefreshWrapper(code, pluginName, id, getComponentName) {
     const componentName = getComponentName?.(code)
     if (!componentName) return code;
