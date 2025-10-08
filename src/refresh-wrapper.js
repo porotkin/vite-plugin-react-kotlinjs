@@ -17,18 +17,11 @@ export function addRefreshWrapper(code, pluginName, id, getComponentName) {
     const componentName = getComponentName?.(code)
     if (!componentName) return code;
 
-    const packageName = id.split('/kotlin/').pop()
-        .replace(`${componentName}.mjs`, '')
-        .split(/[\/\\-]/g)
-        .map(part => capitalize(part))
-        .join('')
-
     const registerHmr = `   
 import * as RefreshRuntime from "${runtimePublicPath}";
 const inWebWorker = typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope;
 if (import.meta.hot && !inWebWorker) {
-  const component = get_${componentName}?.()
-  $RefreshReg$(component, "${componentName + packageName}")
+  $RefreshReg$(get_${componentName}?.(), "${componentName}")
   RefreshRuntime.__hmr_import(import.meta.url).then((currentExports) => {
     RefreshRuntime.registerExportsForReactRefresh(${JSON.stringify(id)}, currentExports);
     import.meta.hot.accept((nextExports) => {
@@ -46,7 +39,7 @@ function normalizeExports(value) {
     }
 }
 function $RefreshReg$(type, id) {
-    return RefreshRuntime.register(type, "/Users/mikhail.porotkin_1/Projects/Open-source/use-action-state/src/App.tsx " + id);
+    return RefreshRuntime.register(type, ${JSON.stringify(id)} + " " + id);
 }
 function $RefreshSig$() {
     return RefreshRuntime.createSignatureFunctionForTransform();
