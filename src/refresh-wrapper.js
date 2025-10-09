@@ -27,8 +27,10 @@ if (import.meta.hot && !inWebWorker) {
   });
 }
 function normalizeExports(value) {
-    if (!value) return undefined;
-    const [[key, type]] = Object.entries(value)
+    if (!value) return [];
+    const [entry] = Object.entries(value)
+    if (!entry) return [];
+    const [key, type] = entry
     const name = key.replace("get_", "");
     return {
         [name]: (...args) => type?.(...args),
@@ -36,9 +38,6 @@ function normalizeExports(value) {
 }
 function $RefreshReg$(type, id) {
     return RefreshRuntime.register(type, ${JSON.stringify(id)} + " " + id);
-}
-function $RefreshSig$() {
-    return RefreshRuntime.createSignatureFunctionForTransform();
 }
 `
     return code + registerHmr;
