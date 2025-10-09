@@ -27,6 +27,7 @@ if (import.meta.hot && !inWebWorker) {
   });
 }
 function normalizeExports(value) {
+    if (!value) return undefined;
     const [[key, type]] = Object.entries(value)
     const name = key.replace("get_", "");
     return {

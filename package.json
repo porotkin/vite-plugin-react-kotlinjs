@@ -21,7 +21,6 @@
     "postinstall": "node copyRefreshRuntime.js"
   },
   "dependencies": {
-    "@babel/core": "^7.28.4",
     "@rolldown/pluginutils": "1.0.0-beta.41",
     "react-refresh": "^0.17.0"
   },
