@@ -13,7 +13,7 @@ const dependencies = [
 ]
 
 export const viteReactRefreshPlugin = (options) => ({
-    name: 'vite:react-refresh',
+    name: 'vite:react-refresh-kotlinjs',
     enforce: 'pre',
     config: (userConfig) => ({
         build: silenceUseClientWarning(userConfig),
