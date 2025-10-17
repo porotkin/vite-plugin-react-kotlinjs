@@ -2,7 +2,7 @@ import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {exactRegex} from '@rolldown/pluginutils'
 import {readFileSync} from 'node:fs'
-import {runtimePublicPath} from "./refresh-wrapper.js";
+import {getPreambleCode, runtimePublicPath} from "./refresh-wrapper.js";
 import {silenceUseClientWarning} from "./warning.js";
 
 const _dirname = dirname(fileURLToPath(import.meta.url))

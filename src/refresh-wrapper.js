@@ -19,20 +19,10 @@ if (import.meta.hot && !inWebWorker) {
     RefreshRuntime.registerExportsForReactRefresh(${JSON.stringify(id)}, currentExports);
     import.meta.hot.accept((nextExports) => {
       if (!nextExports) return;
-      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate(${JSON.stringify(id)}, normalizeExports(currentExports), normalizeExports(nextExports));
+      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate(${JSON.stringify(id)}, RefreshRuntime.normalizeExports(currentExports), RefreshRuntime.normalizeExports(nextExports));
       if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);
     });
   });
-}
-function normalizeExports(value) {
-    if (!value) return [];
-    const [entry] = Object.entries(value)
-    if (!entry) return [];
-    const [key, type] = entry
-    const name = key.replace("get_", "");
-    return {
-        [name]: (...args) => type?.(...args),
-    }
 }
 function $RefreshReg$(type, id) {
     return RefreshRuntime.register(type, ${JSON.stringify(id)} + " " + id);

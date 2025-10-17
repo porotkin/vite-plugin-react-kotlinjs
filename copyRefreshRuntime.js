@@ -1,9 +1,9 @@
-import {copyFile} from 'fs';
+import {readFile, writeFile} from 'fs/promises';
 
-const filename = 'refresh-runtime.js';
+const refreshRuntime = 'refresh-runtime.js';
+const normalizeExports = 'normalize-exports.js';
 
-// destination will be created or overwritten by default.
-copyFile(`./node_modules/@vitejs/plugin-react/dist/${filename}`, `./src/${filename}`, (err) => {
-    if (err) throw err;
-    console.log(`${filename} was copied`);
-});
+const source = await readFile(`./node_modules/@vitejs/plugin-react/dist/${refreshRuntime}`)
+const normalizeExportsSource = await readFile(`./src/${normalizeExports}`)
+
+await writeFile(`./src/${refreshRuntime}`, source + normalizeExportsSource, 'utf-8')
