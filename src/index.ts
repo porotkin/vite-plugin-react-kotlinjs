@@ -9,37 +9,41 @@ export interface Options {
 }
 
 export default (
-    {
+    options?: Options
+): Plugin => {
+    const {
         isReactFC = (code) => code.includes('kotlin-react-core/react/ChildrenBuilder.mjs'),
         getComponentName = (code) => /^function get_([A-Za-z]+)\(\) {$/m.exec(code)?.[1],
-    }: Options
-): Plugin => ({
-    name: 'vite:react-plugin-kotlinjs',
-    enforce: 'pre',
-    transform(code: string) {
-        if (!isReactFC(code)) {
+    } = options ?? {} as Options
+
+    return ({
+        name: 'vite:react-plugin-kotlinjs',
+        enforce: 'pre',
+        transform(code: string) {
+            if (!isReactFC(code)) {
+                return {
+                    code: code,
+                    map: null,
+                }
+            }
+
+            const componentName = getComponentName(code);
+            if (!componentName) {
+                return {
+                    code: code,
+                    map: null,
+                }
+            }
+
+            const transformedCode = code
+                    .replace(`function get_${componentName}() {`, `function Get${componentName}() {`)
+                    .replace(`get_${componentName} as get_`, `Get${componentName} as get_`)
+                + REACT_PLUGIN_ENABLER
+
             return {
-                code: code,
+                code: transformedCode,
                 map: null,
             }
         }
-
-        const componentName = getComponentName(code);
-        if (!componentName) {
-            return {
-                code: code,
-                map: null,
-            }
-        }
-
-        const transformedCode = code
-                .replace(`function get_${componentName}() {`, `function Get${componentName}() {`)
-                .replace(`get_${componentName} as get_`, `Get${componentName} as get_`)
-            + REACT_PLUGIN_ENABLER
-
-        return {
-            code: transformedCode,
-            map: null,
-        }
-    }
-})
+    });
+}
