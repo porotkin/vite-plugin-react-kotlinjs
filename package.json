@@ -13,19 +13,19 @@
     "react-refresh-kotlinjs"
   ],
   "files": [
-    "src"
+    "dist"
   ],
   "type": "module",
-  "exports": "./src/index.js",
-  "scripts": {
-    "postinstall": "node copyRefreshRuntime.js"
+  "exports": {
+    ".": "./dist/index.js"
   },
-  "dependencies": {
-    "@babel/core": "^7.28.4",
-    "@rolldown/pluginutils": "1.0.0-beta.41",
-    "react-refresh": "^0.17.0"
+  "scripts": {
+    "build": "tsdown"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^5.0.4"
+    "vite": "^7.2.7",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsdown": "^0.17.2",
+    "typescript": "^5.9.3"
   }
 }

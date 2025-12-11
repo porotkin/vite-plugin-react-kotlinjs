@@ -1,6 +1,6 @@
 # IDEA ignore list
 .idea
 
+dist
 node_modules
-src/refresh-runtime.js
 vite-plugin-react-kotlinjs.iml
