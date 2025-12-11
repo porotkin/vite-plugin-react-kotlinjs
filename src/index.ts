@@ -1,7 +1,7 @@
 import type {Plugin} from 'vite'
 
 const REACT_JSX_FACTORY_IMPORT = 'react/jsx-dev-runtime';
-const REACT_PLUGIN_ENABLER = `const $$$___$$$___$$$ = "${REACT_JSX_FACTORY_IMPORT}"\n`;
+const REACT_PLUGIN_ENABLER = `\nconst $$$___$$$___$$$ = "${REACT_JSX_FACTORY_IMPORT}"\n`;
 
 export interface Options {
     isReactFC?: (code: string) => boolean
