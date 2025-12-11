@@ -19,6 +19,7 @@ export default (
     return ({
         name: 'vite:react-plugin-kotlinjs',
         enforce: 'pre',
+        apply: 'serve',
         transform(code: string) {
             if (!isReactFC(code)) {
                 return {
@@ -38,10 +39,9 @@ export default (
             const transformedCode = code
                     .replace(`function get_${componentName}() {`, `function Get${componentName}() {`)
                     .replace(`get_${componentName} as get_`, `Get${componentName} as get_`)
-                + REACT_PLUGIN_ENABLER
 
             return {
-                code: transformedCode,
+                code: transformedCode + REACT_PLUGIN_ENABLER,
                 map: null,
             }
         }
