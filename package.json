@@ -1,6 +1,6 @@
 {
   "name": "@porotkin/vite-plugin-react-kotlinjs",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Support React fast refresh in Kotlin/JS",
   "license": "MIT",
   "author": "Mikhail Porotkin",
