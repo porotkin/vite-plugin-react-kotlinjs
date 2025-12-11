@@ -13,7 +13,7 @@ export default (
 ): Plugin => {
     const {
         isReactFC = (code) => code.includes('kotlin-react-core/react/ChildrenBuilder.mjs'),
-        getComponentName = (code) => /^function get_([A-Za-z]+)\(\) {$/m.exec(code)?.[1],
+        getComponentName = (code) => /export {(?:.|\s)*get_([A-Za-z]+) as get_(?:.|\s)*}/.exec(code)?.[1],
     } = options ?? {} as Options
 
     return ({
