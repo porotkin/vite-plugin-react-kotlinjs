@@ -1,9 +1,6 @@
 # Vite Plugin React KotlinJS
 
-A Vite plugin that enables Fast Refresh support for Kotlin/JS React applications. 
-
-This plugin is inspired by the original 
-[@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/tree/main) and adapted to work with Kotlin/JS.
+A Vite plugin that enables Fast Refresh support for Kotlin/JS React applications by post-processing generated JS files.
 
 ## Installation
 
