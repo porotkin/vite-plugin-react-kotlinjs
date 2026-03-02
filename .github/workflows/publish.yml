@@ -22,5 +22,3 @@ jobs:
         run: npm run build
       - name: Publish to npm
         run: npm publish --ignore-scripts --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
