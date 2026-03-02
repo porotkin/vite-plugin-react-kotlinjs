@@ -6,6 +6,7 @@ const REACT_PLUGIN_ENABLER = `\nconst $$$___$$$___$$$ = "${REACT_JSX_FACTORY_IMP
 export interface Options {
     isReactFC?: (code: string) => boolean
     getComponentName?: (code: string) => string | undefined
+    debug?: boolean
 }
 
 export default (
@@ -14,13 +15,14 @@ export default (
     const {
         isReactFC = (code) => code.includes('kotlin-react-core/react/ChildrenBuilder.mjs'),
         getComponentName = (code) => /export {(?:.|\s)*get_([A-Za-z]+) as get_(?:.|\s)*}/.exec(code)?.[1],
+        debug = false,
     } = options ?? {} as Options
 
     return ({
         name: 'vite:react-plugin-kotlinjs',
         enforce: 'pre',
         apply: 'serve',
-        transform(code: string) {
+        transform(code: string, id: string) {
             if (!isReactFC(code)) {
                 return {
                     code: code,
@@ -39,6 +41,10 @@ export default (
             const transformedCode = code
                     .replace(`function get_${componentName}() {`, `function Get${componentName}() {`)
                     .replace(`get_${componentName} as get_`, `Get${componentName} as get_`)
+
+            if (debug) {
+                console.log(`[vite-plugin-react-kotlinjs] transformed: ${id}`);
+            }
 
             return {
                 code: transformedCode + REACT_PLUGIN_ENABLER,
