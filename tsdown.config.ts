@@ -4,5 +4,4 @@ export default defineConfig({
     entry: 'src/index.ts',
     fixedExtension: false,
     dts: true,
-    inlineOnly: false,
 })

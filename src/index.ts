@@ -1,5 +1,3 @@
-import type {Plugin} from 'vite'
-
 const REACT_JSX_FACTORY_IMPORT = 'react/jsx-dev-runtime';
 const REACT_PLUGIN_ENABLER = `\nconst $$$___$$$___$$$ = "${REACT_JSX_FACTORY_IMPORT}"\n`;
 
@@ -11,7 +9,7 @@ export interface Options {
 
 export default (
     options?: Options
-): Plugin => {
+) => {
     const {
         isReactFC = (code) => code.includes('kotlin-react/react/ChildrenBuilder.mjs'),
         getComponentName = (code) => /export {(?:.|\s)*get_([A-Za-z]+) as get_(?:.|\s)*}/.exec(code)?.[1],
