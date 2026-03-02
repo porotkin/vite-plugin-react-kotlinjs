@@ -46,6 +46,12 @@ Custom function to check if the code is a React functional component.
 
 Custom function to extract React component names from the code. Useful if your Kotlin/JS compiler generates different patterns.
 
+### `debug`
+
+- **Type:** `boolean`
+
+Output debug information about the transformed files.
+
 ## How it works
 
 Plugin post-processes generated Kotlin/JS files, so the official Vite React plugin can handle them.
