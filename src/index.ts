@@ -12,7 +12,7 @@ export default (
 ) => {
     const {
         isReactFC = (code) => code.includes('kotlin-react/react/ChildrenBuilder.mjs'),
-        getComponentName = (code) => /export {(?:.|\s)*get_([A-Za-z]+) as get_(?:.|\s)*}/.exec(code)?.[1],
+        getComponentName = (code) => /export {(?:.|\s)*get_([\w$]+) as get_(?:.|\s)*}/.exec(code)?.[1],
         debug = false,
     } = options ?? {} as Options
 
