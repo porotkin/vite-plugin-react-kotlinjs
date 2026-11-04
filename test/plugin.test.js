@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import reactKotlinJs, { normalizeKotlinMjs } from '../dist/index.js';
+import {describe, test} from 'node:test';
+import reactKotlinJs, {normalizeKotlinMjs} from '../dist/index.js';
 
-test('normalizeKotlinMjs rewrites Kotlin/JS hook patterns', () => {
-    const input = `import { useState, useEffect } from 'react';
+const normalize = (code) => normalizeKotlinMjs(code).replace(/[ \t]+$/gm, '');
+
+const normalizeCases = [
+    {
+        name: 'destructures useState and inlines a lifted useEffect callback',
+        input: `import { useState, useEffect } from 'react';
 import { Unit_getInstance3abc as Unit_getInstance } from './stdlib.mjs';
 function App$lambda() {
   var tmp = useState(0);
@@ -14,10 +18,8 @@ function App$lambda() {
 function App$lambda$lambda() {
   var x = 1;
   return Unit_getInstance();
-}`;
-    assert.equal(
-        normalizeKotlinMjs(input).replace(/[ \t]+$/gm, ''),
-        `import { useState, useEffect } from 'react';
+}`,
+        expected: `import { useState, useEffect } from 'react';
 import { Unit_getInstance3abc as Unit_getInstance } from './stdlib.mjs';
 function App$lambda() {
   let [count, setCount] = useState(0);
@@ -32,23 +34,246 @@ function _App$lambda$lambda() {
   let x = 1;
 
 }`,
-    );
+    },
+
+    {
+        name: 'rewrites nested var and destructures useState(x)[0]',
+        input: `import { useState as useState } from 'react';
+function useFilteredLabels(items, prefix) {
+  'use memo';
+  var tmp$ret$0 = toString(trim(prefix));
+  var normalizedPrefix = useState(tmp$ret$0)[0];
+  var tmp;
+  if (charSequenceLength(normalizedPrefix) > 0) {
+    var destination = ArrayList().new_kotlin_collections_ArrayList_h94ppk_k$();
+    tmp = copyToArray(destination);
+  } else {
+    tmp = items;
+  }
+  return tmp;
+}`,
+        expected: `import { useState as useState } from 'react';
+function useFilteredLabels(items, prefix) {
+  'use memo';
+  let tmp$ret$0 = toString(trim(prefix));
+  let [normalizedPrefix] = useState(tmp$ret$0);
+  let tmp;
+  if (charSequenceLength(normalizedPrefix) > 0) {
+    let destination = ArrayList().new_kotlin_collections_ArrayList_h94ppk_k$();
+    tmp = copyToArray(destination);
+  } else {
+    tmp = items;
+  }
+  return tmp;
+}`,
+    },
+
+    {
+        name: 'inlines a lifted useMemo callback and keeps useCallback returns',
+        input: `import {
+  useMemo as useMemo,
+  useCallback as useCallback,
+} from 'react';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
+function useSearchResults(items, onSelect) {
+  'use memo';
+  var defaultHeader = useMemo(useSearchResults$lambda, []);
+  var handleSelectIndex = useCallback((index) => {
+    onSelect(getOrNull(items, index) ?? defaultHeader);
+    return Unit_getInstance();
+  }, [items, onSelect]);
+  return to(items, handleSelectIndex);
+}
+function useSearchResults$lambda() {
+  return 'Results';
+}`,
+        expected: `import {
+  useMemo as useMemo,
+  useCallback as useCallback,
+} from 'react';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
+function useSearchResults(items, onSelect) {
+  'use memo';
+  let defaultHeader = useMemo(() => {
+  return 'Results';
+}, []);
+  let handleSelectIndex = useCallback((index) => {
+    onSelect(getOrNull(items, index) ?? defaultHeader);
+    return Unit_getInstance();
+  }, [items, onSelect]);
+  return to(items, handleSelectIndex);
+}
+function _useSearchResults$lambda() {
+  return 'Results';
+}`,
+    },
+
+    {
+        name: 'prefixes hook lambdas and slambdas, leaves kotlin-react useEffect alone',
+        input: `import { useState as useState } from 'react';
+import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';
+function usePolledItems(items, onTick) {
+  var _destruct__k2r9zo = useState(0);
+  var tickCount = _destruct__k2r9zo[0];
+  var setTickCount = _destruct__k2r9zo[1];
+  useEffect([items, onTick], usePolledItems$slambda(items, setTickCount, onTick));
+  return to(items, () => {
+    setTickCount(usePolledItems$lambda$lambda);
+    return Unit_getInstance();
+  });
+}
+function usePolledItems$slambda($items, $setTickCount, $onTick) {
+  return constructCallableReference(($this$useEffect, $completion) => orPromise($completion, function *($completion) {
+    $setTickCount(usePolledItems$slambda$lambda);
+    return Unit_getInstance();
+  }), 1);
+}
+function usePolledItems$slambda$lambda(it) {
+  return it + 1 | 0;
+}
+function usePolledItems$lambda$lambda(it) {
+  return it + 1 | 0;
+}`,
+        expected: `import { useState as useState } from 'react';
+import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';
+function usePolledItems(items, onTick) {
+  let [tickCount, setTickCount] = useState(0);
+
+
+  useEffect([items, onTick], _usePolledItems$slambda(items, setTickCount, onTick));
+  return to(items, () => {
+    setTickCount(_usePolledItems$lambda$lambda);
+    return Unit_getInstance();
+  });
+}
+function _usePolledItems$slambda($items, $setTickCount, $onTick) {
+  return constructCallableReference(($this$useEffect, $completion) => orPromise($completion, function *($completion) {
+    $setTickCount(_usePolledItems$slambda$lambda);
+    return Unit_getInstance();
+  }), 1);
+}
+function _usePolledItems$slambda$lambda(it) {
+  return it + 1 | 0;
+}
+function _usePolledItems$lambda$lambda(it) {
+  return it + 1 | 0;
+}`,
+    },
+
+    {
+        name: 'destructures indexed useState and .at() useTransition results',
+        input: `import {
+  useState as useState,
+  useTransition as useTransition,
+} from 'react';
+function DestructuredStateDemo$lambda() {
+  'use memo';
+  var _destruct__k2r9zo = useState(0);
+  // Inline function 'react.StateInstance.component1' call
+  var count = _destruct__k2r9zo[0];
+  // Inline function 'react.StateInstance.component2' call
+  var setCount = _destruct__k2r9zo[1];
+  var _destruct__k2r9zo_0 = useTransition();
+  var isPending = _destruct__k2r9zo_0.at(0);
+  var startTransition = _destruct__k2r9zo_0.at(1);
+  var attrs = {};
+  attrs.onClick = (it) => {
+    startTransition(() => {
+      setCount(DestructuredStateDemo$lambda$lambda$lambda$lambda);
+      return Unit_getInstance();
+    });
+    return Unit_getInstance();
+  };
+  attrs.children = 'Count: ' + count + ' (pending: ' + isPending + ')';
+  return jsx('button', attrs);
+}
+function DestructuredStateDemo$lambda$lambda$lambda$lambda(it) {
+  return it + 1 | 0;
+}`,
+        expected: `import {
+  useState as useState,
+  useTransition as useTransition,
+} from 'react';
+function DestructuredStateDemo$lambda() {
+  'use memo';
+  let [count, setCount] = useState(0);
+  // Inline function 'react.StateInstance.component1' call
+
+  // Inline function 'react.StateInstance.component2' call
+
+  let [isPending, startTransition] = useTransition();
+
+
+  let attrs = {};
+  attrs.onClick = (it) => {
+    startTransition(() => {
+      setCount(_DestructuredStateDemo$lambda$lambda$lambda$lambda);
+      return Unit_getInstance();
+    });
+    return Unit_getInstance();
+  };
+  attrs.children = 'Count: ' + count + ' (pending: ' + isPending + ')';
+  return jsx('button', attrs);
+}
+function _DestructuredStateDemo$lambda$lambda$lambda$lambda(it) {
+  return it + 1 | 0;
+}`,
+    },
+
+    {
+        name: 'drops the trailing Unit return from an inline useEffect arrow',
+        input: `import { useEffect as useEffect } from 'react';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
+function EffectAndGettersDemo$lambda(props) {
+  'use memo';
+  useEffect(() => {
+    console.log('Rendered label:', props.label);
+    return Unit_getInstance();
+  }, [props.label]);
+  return jsx(get_ChildBadge(), { text: props.label });
+}`,
+        expected: `import { useEffect as useEffect } from 'react';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
+function EffectAndGettersDemo$lambda(props) {
+  'use memo';
+  useEffect(() => {
+    console.log('Rendered label:', props.label);
+
+  }, [props.label]);
+  return jsx(get_ChildBadge(), { text: props.label });
+}`,
+    },
+];
+
+describe('normalizeKotlinMjs', () => {
+    for (const {name, input, expected} of normalizeCases) {
+        test(name, () => assert.equal(normalize(input), expected));
+    }
 });
 
-test('fast refresh plugin renames the component getter, dev server only', () => {
-    const input = `import { jsx } from 'react/jsx-runtime';
+describe('fast refresh plugin', () => {
+    const [compiler, fastRefresh] = reactKotlinJs();
+
+    test('runs after the compiler, on the dev server only', () => {
+        assert.deepEqual([compiler.name, fastRefresh.name], ['kotlin-react-compiler', 'vite:react-plugin-kotlinjs']);
+        assert.equal(fastRefresh.apply, 'serve');
+    });
+
+    test('renames the component getter and switches to the dev JSX runtime', () => {
+        const input = `import { jsx } from 'react/jsx-runtime';
 function get_App() {
   return App;
 }
 export {
   get_App as get_App,
 };`;
-    const [compiler, fastRefresh] = reactKotlinJs();
-    assert.deepEqual([compiler.name, fastRefresh.name], ['kotlin-react-compiler', 'vite:react-plugin-kotlinjs']);
-    assert.equal(fastRefresh.apply, 'serve');
-    assert.match(
-        fastRefresh.transform.handler(input, 'App.mjs').code,
-        /function GetApp\(\) \{[\s\S]*GetApp as get_App[\s\S]*react\/jsx-dev-runtime/,
-    );
-    assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
+        assert.match(
+            fastRefresh.transform.handler(input, 'App.mjs').code,
+            /function GetApp\(\) \{[\s\S]*GetApp as get_App[\s\S]*react\/jsx-dev-runtime/,
+        );
+    });
+
+    test('skips modules without a component getter', () => {
+        assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
+    });
 });
