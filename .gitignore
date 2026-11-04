@@ -4,3 +4,4 @@
 dist
 node_modules
 vite-plugin-react-kotlinjs.iml
+.DS_Store
