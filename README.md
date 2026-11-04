@@ -16,8 +16,8 @@ dependencies {
 For React Compiler support, also add `@babel/core` and `babel-plugin-react-compiler`:
 ```kotlin
 dependencies {
-  jsMainImplementation(devNpm("@babel/core", "^7.26.0"))
-  jsMainImplementation(devNpm("babel-plugin-react-compiler", "^1.0.0"))
+    jsMainImplementation(devNpm("@babel/core", "latest"))
+    jsMainImplementation(devNpm("babel-plugin-react-compiler", "latest"))
 }
 ```
 
