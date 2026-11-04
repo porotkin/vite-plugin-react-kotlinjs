@@ -20,7 +20,8 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "tsdown && node --test"
   },
   "devDependencies": {
     "tsdown": "^0.23.4",
