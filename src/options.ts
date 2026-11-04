@@ -2,12 +2,14 @@ export type CompilationMode = 'annotation' | 'infer' | 'syntax' | 'all';
 
 export interface ReactCompilerOptions {
     compilationMode?: CompilationMode;
+    include?: Array<string | RegExp>;
 }
 
-export interface Options {
+export interface Options extends ReactCompilerOptions {
     isReactFC?: (code: string) => boolean;
     getComponentName?: (code: string) => string | undefined;
     debug?: boolean;
+    reactCompiler?: boolean | ReactCompilerOptions;
 }
 
 export const DEFAULT_COMPILATION_MODE: CompilationMode = 'annotation';
@@ -20,9 +22,13 @@ const defaultGetComponentName = (code: string) => /export {(?:.|\s)*get_([\w$]+)
 
 export type ResolvedOptions = ReturnType<typeof resolveOptions>;
 
+/** Values in a `reactCompiler` object override the top-level ones; `reactCompiler: false` disables the compiler. */
 export function resolveOptions(options: Options) {
+    const overrides = typeof options.reactCompiler === 'object' ? options.reactCompiler : {};
     return {
-        include: DEFAULT_INCLUDE,
+        reactCompiler: options.reactCompiler !== false,
+        compilationMode: overrides.compilationMode ?? options.compilationMode ?? DEFAULT_COMPILATION_MODE,
+        include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
         // A custom `isReactFC` may accept modules without the default markers, so those can't be pre-filtered.
         reactModuleMarkers: options.isReactFC ? undefined : REACT_MODULE_MARKERS,

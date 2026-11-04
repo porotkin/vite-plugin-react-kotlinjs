@@ -43,8 +43,8 @@ function get_App() {
 export {
   get_App as get_App,
 };`;
-    const fastRefresh = reactKotlinJs();
-    assert.equal(fastRefresh.name, 'vite:react-plugin-kotlinjs');
+    const [compiler, fastRefresh] = reactKotlinJs();
+    assert.deepEqual([compiler.name, fastRefresh.name], ['kotlin-react-compiler', 'vite:react-plugin-kotlinjs']);
     assert.equal(fastRefresh.apply, 'serve');
     assert.match(
         fastRefresh.transform.handler(input, 'App.mjs').code,
