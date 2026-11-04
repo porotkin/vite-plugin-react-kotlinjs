@@ -4,7 +4,10 @@ export interface Options {
     debug?: boolean;
 }
 
-const defaultIsReactFC = (code: string) => code.includes('kotlin-react/react/ChildrenBuilder.mjs');
+/** Imports that mark a Kotlin/JS module as React code. */
+const REACT_MODULE_MARKERS = ['kotlin-react/react/ChildrenBuilder.mjs', 'react/jsx-runtime'];
+
+const defaultIsReactFC = (code: string) => REACT_MODULE_MARKERS.some((marker) => code.includes(marker));
 const defaultGetComponentName = (code: string) => /export {(?:.|\s)*get_([\w$]+) as get_(?:.|\s)*}/.exec(code)?.[1];
 
 export type ResolvedOptions = ReturnType<typeof resolveOptions>;
