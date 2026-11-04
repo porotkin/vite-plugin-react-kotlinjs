@@ -1,9 +1,16 @@
+export type CompilationMode = 'annotation' | 'infer' | 'syntax' | 'all';
+
+export interface ReactCompilerOptions {
+    compilationMode?: CompilationMode;
+}
+
 export interface Options {
     isReactFC?: (code: string) => boolean;
     getComponentName?: (code: string) => string | undefined;
     debug?: boolean;
 }
 
+export const DEFAULT_COMPILATION_MODE: CompilationMode = 'annotation';
 const DEFAULT_INCLUDE = [/\.mjs$/];
 /** Imports that mark a Kotlin/JS module as React code. */
 const REACT_MODULE_MARKERS = ['kotlin-react/react/ChildrenBuilder.mjs', 'react/jsx-runtime'];
