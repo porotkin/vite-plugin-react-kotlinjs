@@ -1,7 +1,18 @@
-import { importFromProject } from '../shared/project';
-import { applyEdits, type TextEdit } from './text-edits';
+import type {
+    ArrowFunctionExpression,
+    BindingIdentifier,
+    Directive,
+    Expression,
+    Function,
+    Program,
+    Span,
+    Statement,
+    VariableDeclarator,
+} from '@oxc-project/types';
+import {importFromProject} from '../shared/project';
+import {applyEdits, type TextEdit} from './text-edits';
 
-const { parseSync, Visitor } = await importFromProject('rolldown/utils');
+const {parseSync, Visitor}: typeof import('rolldown/utils') = await importFromProject('rolldown/utils');
 
 const STATE_HOOKS = new Set(['useState', 'useTransition']);
 const CALLBACK_HOOKS = new Set(['useMemo', 'useCallback', 'useEffect']);
@@ -25,17 +36,17 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
     // Leaf edits are token-level and are replayed when a lifted callback is copied inline.
     const structural: TextEdit[] = [];
     const leaf: TextEdit[] = [];
-    const inlined: Array<{ reference: any; fn: any }> = [];
+    const inlined: Array<{ reference: Span; fn: Function }> = [];
 
     new Visitor({
-        VariableDeclaration(node: any) {
+        VariableDeclaration(node) {
             if (node.kind === 'var') leaf.push({ start: node.start, end: node.start + 3, text: 'let' });
         },
-        Identifier(node: any) {
+        Identifier(node) {
             const rename = renames.get(node.name);
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
         },
-        CallExpression(node: any) {
+        CallExpression(node) {
             if (!scope.isReactHook(node.callee, CALLBACK_HOOKS)) return;
             const callback = node.arguments[0];
             const lifted = callback?.type === 'Identifier' ? scope.functions.get(callback.name) : undefined;
@@ -44,7 +55,7 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
             if (fn && scope.importOf(node.callee)?.name === 'useEffect') leaf.push(...dropTrailingUnitReturn(fn, scope));
             if (inlinable) inlined.push({ reference: callback, fn: inlinable });
         },
-        BlockStatement(node: any) {
+        BlockStatement(node) {
             structural.push(...destructureStateHooks(node.body, scope));
         },
     }).visit(program);
@@ -58,16 +69,16 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
 type ModuleScope = ReturnType<typeof analyzeModule>;
 
 /** Top-level named imports and function declarations of a module. */
-function analyzeModule(body: any[]) {
+function analyzeModule(body: Program['body']) {
     const imports = new Map<string, { source: string; name: string }>();
-    const functions = new Map<string, any>();
+    const functions = new Map<string, Function>();
     for (const statement of body) {
         if (statement.type === 'ImportDeclaration') {
             for (const specifier of statement.specifiers) {
                 if (specifier.type !== 'ImportSpecifier') continue;
                 imports.set(specifier.local.name, {
                     source: statement.source.value,
-                    name: specifier.imported.name ?? specifier.imported.value,
+                    name: specifier.imported.type === 'Literal' ? specifier.imported.value : specifier.imported.name,
                 });
             }
         } else if (statement.type === 'FunctionDeclaration' && statement.id) {
@@ -75,15 +86,15 @@ function analyzeModule(body: any[]) {
         }
     }
 
-    const importOf = (node: any) => (node?.type === 'Identifier' ? imports.get(node.name) : undefined);
+    const importOf = (node: Expression | null | undefined) => (node?.type === 'Identifier' ? imports.get(node.name) : undefined);
     return {
         functions,
         importOf,
-        isReactHook(node: any, hooks: Set<string>) {
+        isReactHook(node: Expression, hooks: Set<string>) {
             const binding = importOf(node);
             return binding?.source === 'react' && hooks.has(binding.name);
         },
-        isUnitInstanceCall(node: any) {
+        isUnitInstanceCall(node: Expression | null) {
             return node?.type === 'CallExpression' && Boolean(importOf(node.callee)?.name.startsWith('Unit_getInstance'));
         },
     };
@@ -98,7 +109,7 @@ function syntheticHelperRenames(functions: Map<string, unknown>) {
 }
 
 /** An effect may only return a cleanup function, never Kotlin's `Unit`. */
-function dropTrailingUnitReturn(fn: any, scope: ModuleScope): TextEdit[] {
+function dropTrailingUnitReturn(fn: Function | ArrowFunctionExpression, scope: ModuleScope): TextEdit[] {
     const last = fn.body?.type === 'BlockStatement' ? fn.body.body.at(-1) : undefined;
     return last?.type === 'ReturnStatement' && scope.isUnitInstanceCall(last.argument)
         ? [{ start: last.start, end: last.end, text: '' }]
@@ -106,23 +117,23 @@ function dropTrailingUnitReturn(fn: any, scope: ModuleScope): TextEdit[] {
 }
 
 /** Renders a hoisted function declaration as an arrow, keeping the leaf edits made inside it. */
-function toArrow(code: string, fn: any, leaf: TextEdit[]): string {
-    const params = fn.params.map((param: any) => applyEdits(code, leaf, param.start, param.end));
-    return `(${params.join(', ')}) => ${applyEdits(code, leaf, fn.body.start, fn.body.end)}`;
+function toArrow(code: string, fn: Function, leaf: TextEdit[]): string {
+    const params = fn.params.map((param) => applyEdits(code, leaf, param.start, param.end));
+    return `(${params.join(', ')}) => ${applyEdits(code, leaf, fn.body!.start, fn.body!.end)}`;
 }
 
 /**
  * `var t = useState(x); var a = t[0]; var b = t[1];` → `let [a, b] = useState(x);`
  * `var a = useState(x)[0];`                          → `let [a] = useState(x);`
  */
-function destructureStateHooks(statements: any[], scope: ModuleScope): TextEdit[] {
-    const isStateHookCall = (node: any) => node?.type === 'CallExpression' && scope.isReactHook(node.callee, STATE_HOOKS);
-    const bindAs = (statement: any, names: string[]): TextEdit => ({
+function destructureStateHooks(statements: Array<Directive | Statement>, scope: ModuleScope): TextEdit[] {
+    const isStateHookCall = (node: Expression | null | undefined) => node?.type === 'CallExpression' && scope.isReactHook(node.callee, STATE_HOOKS);
+    const bindAs = (statement: Span, head: IdentifierDeclarator, names: string[]): TextEdit => ({
         start: statement.start,
-        end: statement.declarations[0].id.end,
+        end: head.id.end,
         text: `let [${names.join(', ')}]`,
     });
-    const remove = (node: any): TextEdit => ({ start: node.start, end: node.end, text: '' });
+    const remove = (node: Span): TextEdit => ({start: node.start, end: node.end, text: ''});
 
     const edits: TextEdit[] = [];
     for (let i = 0; i < statements.length; i++) {
@@ -131,7 +142,11 @@ function destructureStateHooks(statements: any[], scope: ModuleScope): TextEdit[
 
         const single = indexedAccess(head.init);
         if (single?.index === 0 && isStateHookCall(single.target)) {
-            edits.push(bindAs(statements[i], [head.id.name]), { start: single.target.end, end: head.init.end, text: '' });
+            edits.push(bindAs(statements[i], head, [head.id.name]), {
+                start: single.target.end,
+                end: head.init.end,
+                text: ''
+            });
             continue;
         }
 
@@ -139,31 +154,33 @@ function destructureStateHooks(statements: any[], scope: ModuleScope): TextEdit[
         const value = singleDeclarator(statements[i + 1]);
         const setter = singleDeclarator(statements[i + 2]);
         if (readsIndex(value, head.id.name, 0) && readsIndex(setter, head.id.name, 1)) {
-            edits.push(bindAs(statements[i], [value.id.name, setter.id.name]), remove(statements[i + 1]), remove(statements[i + 2]));
+            edits.push(bindAs(statements[i], head, [value.id.name, setter.id.name]), remove(statements[i + 1]), remove(statements[i + 2]));
             i += 2;
         }
     }
     return edits;
 }
 
+type IdentifierDeclarator = VariableDeclarator & { id: BindingIdentifier };
+
 /** The declarator of `var <identifier> = ...` with exactly one binding. */
-function singleDeclarator(statement: any) {
+function singleDeclarator(statement: Directive | Statement | undefined) {
     return statement?.type === 'VariableDeclaration' &&
         statement.declarations.length === 1 &&
         statement.declarations[0].id.type === 'Identifier'
-        ? statement.declarations[0]
+        ? (statement.declarations[0] as IdentifierDeclarator)
         : undefined;
 }
 
 /** Whether `declarator` is `... = <name>[index]` or `... = <name>.at(index)`. */
-function readsIndex(declarator: any, name: string, index: number) {
+function readsIndex(declarator: IdentifierDeclarator | undefined, name: string, index: number): declarator is IdentifierDeclarator {
     const access = declarator?.init ? indexedAccess(declarator.init) : undefined;
     return access?.index === index && access.target.type === 'Identifier' && access.target.name === name;
 }
 
 /** Matches `target[n]` and `target.at(n)` with a numeric literal `n`. */
-function indexedAccess(node: any): { target: any; index: number } | undefined {
-    if (node?.type === 'MemberExpression' && node.computed && typeof node.property.value === 'number') {
+function indexedAccess(node: Expression): { target: Expression; index: number } | undefined {
+    if (node?.type === 'MemberExpression' && node.computed && node.property.type === 'Literal' && typeof node.property.value === 'number') {
         return { target: node.object, index: node.property.value };
     }
     if (
@@ -172,6 +189,7 @@ function indexedAccess(node: any): { target: any; index: number } | undefined {
         !node.callee.computed &&
         node.callee.property.name === 'at' &&
         node.arguments.length === 1 &&
+        node.arguments[0].type === 'Literal' &&
         typeof node.arguments[0].value === 'number'
     ) {
         return { target: node.callee.object, index: node.arguments[0].value };
