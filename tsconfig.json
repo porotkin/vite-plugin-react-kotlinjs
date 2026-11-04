@@ -7,6 +7,9 @@
     "target": "es2023",
     "module": "preserve",
     "moduleResolution": "bundler",
+    "types": [
+      "node"
+    ],
     "strict": true,
     "declaration": true,
     "sourceMap": true,
