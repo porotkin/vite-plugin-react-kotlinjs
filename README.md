@@ -96,8 +96,25 @@ Output debug information about the transformed files.
 
 ## How it works
 
-1. **React Compiler Pre-Transform:** The `kotlin-react-compiler` plugin uses **Oxc** (`parseSync` and `Visitor` from `rolldown/utils`) to normalize Kotlin/JS `.mjs` syntax (`var` to `let`, indexed `useState` / `useTransition` access to array destructuring, `_` prefixing on synthetic `use*$lambda` / `Component$lambda$` helpers, re-inlining lifted `useMemo` / `useCallback` / `useEffect` callbacks, and stripping trailing `return Unit_getInstance()` from `useEffect`) before running `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` for `react/jsx-runtime`.
-2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites exported Kotlin/JS component getters so the official Vite React plugin can apply React Fast Refresh.
+1. **React Compiler Pre-Transform:** The `kotlin-react-compiler` plugin compiles modules that opt in with `"use memo"`
+   (or every React module, unless `compilationMode` is `'annotation'`). It uses **Oxc** (`parseSync` and `Visitor` from
+   `rolldown/utils`) to normalize the Kotlin/JS `.mjs` output:
+   - `var` → `let` (Kotlin/JS emits `let` / `const` itself starting with Kotlin 2.5.20,
+     see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348))
+   - indexed `useState` / `useTransition` results → array destructuring
+   - `_` prefix on synthetic `use*$lambda` / `Component$lambda$` helpers, so they aren't mistaken for hooks or
+     components
+   - lifted `useMemo` / `useCallback` / `useEffect` callbacks → inline arrows
+   - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks
+
+   Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
+   `jsx()` / `jsxs()` from `react/jsx-runtime` return frozen values.
+2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
+   the official Vite React plugin can apply React Fast Refresh:
+   - the exported `get_X()` component getter → `GetX()`, so React Refresh registers it as a component (the export name
+     stays `get_X`)
+   - a `react/jsx-dev-runtime` marker is appended, since `@vitejs/plugin-react` only injects Fast Refresh into modules
+     that mention it
 
 ## Why `@vitejs/plugin-react` is not enough?
 
