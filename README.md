@@ -108,7 +108,9 @@ Output debug information about the transformed files.
    - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks
 
    Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
-   `jsx()` / `jsxs()` from `react/jsx-runtime` return frozen values.
+   `jsx()` / `jsxs()` from `react/jsx-runtime` return frozen values. Before the compiler runs, repeated binding names
+   inside each top-level function are renamed apart: the compiler renames a shadowed `tmp` to `tmp_0` without checking
+   that the name is free, which collides with Kotlin's own `tmp_0` temporaries.
 2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
    the official Vite React plugin can apply React Fast Refresh:
    - the exported `get_X()` component getter → `GetX()`, so React Refresh registers it as a component (the export name

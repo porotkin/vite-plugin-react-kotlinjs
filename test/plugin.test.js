@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'node:test';
-import reactKotlinJs, {normalizeKotlinMjs} from '../dist/index.js';
+import reactKotlinJs, {compileKotlinMjs, normalizeKotlinMjs, projectRequire} from '../dist/index.js';
 
 const normalize = (code) => normalizeKotlinMjs(code).replace(/[ \t]+$/gm, '');
 
@@ -249,6 +249,39 @@ describe('normalizeKotlinMjs', () => {
     for (const {name, input, expected} of normalizeCases) {
         test(name, () => assert.equal(normalize(input), expected));
     }
+});
+
+describe('compileKotlinMjs', () => {
+    // Kotlin/JS names temporaries `tmp`, `tmp_0`, … per function, so an inner `tmp` shadows an outer one next to `tmp_0`.
+    const shadowedTemporaries = (render) => `import { useCallback, useRef } from 'react';
+import { jsx } from 'react/jsx-runtime';
+export function Foo(props) {
+  'use memo';
+  var ref = useRef(null);
+  var cb = useCallback(() => {
+    var tmp = props.a;
+    return tmp;
+  }, [props.a]);
+  var tmp = props.b;
+  var tmp_0 = props.c;
+  ${render}
+  return jsx('div', { onClick: cb, title: tmp, id: tmp_0 });
+}`;
+    const assignedFrom = (code, value) => new RegExp(`(\\w+) = ${value.replace('.', '\\.')};`).exec(code)?.[1];
+
+    test('keeps shadowed Kotlin temporaries apart when compiled', () => {
+        const {code, events} = compileKotlinMjs(shadowedTemporaries(''));
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
+        assert.match(code, new RegExp(`id: ${assignedFrom(code, 'props.c')}\\b`));
+    });
+
+    test('keeps shadowed Kotlin temporaries apart when the compiler bails out', () => {
+        const {code, events} = compileKotlinMjs(shadowedTemporaries('ref.current = 1;'));
+        assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
+        projectRequire('@babel/core').parseSync(code, {sourceType: 'module', configFile: false, babelrc: false});
+        assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
+    });
 });
 
 describe('fast refresh plugin', () => {
