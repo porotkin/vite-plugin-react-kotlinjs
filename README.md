@@ -7,7 +7,7 @@ A Vite plugin that enables Fast Refresh and React Compiler support for Kotlin/JS
 Add the following dependency to your `build.gradle.kts`:
 ```kotlin
 dependencies {
-  jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^1.0.7"))
+  jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^2.0.0"))
 }
 ```
 
