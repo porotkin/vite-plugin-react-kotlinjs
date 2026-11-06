@@ -440,6 +440,50 @@ export function Badge$lambda(props) {
         assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
     });
 
+    test('rewrites VOID default arguments with collision-free parameter names', () => {
+        // Without "use memo" nothing is compiled in annotation mode, so the output is the Babel pre-pass alone.
+        const { code } = compileKotlinMjs(`function useTimeout(x, _x, delay) {
+  x = x === VOID ? 1 : x;
+  if (delay === VOID) {
+    delay = 500;
+  }
+  return x + _x + delay;
+}
+function useSelf(x) {
+  x = x === VOID ? f(x) : x;
+  return x;
+}`);
+        assert.equal(code, `function useTimeout(_x2, _x, _delay) {
+  let x = _x2 === VOID ? 1 : _x2;
+  let delay = _delay === VOID ? 500 : _delay;
+  return x + _x + delay;
+}
+function useSelf(x) {
+  x = x === VOID ? f(x) : x;
+  return x;
+}`);
+    });
+
+    test('compiles hooks with VOID default parameters, BigInt literals, $slambda refs, and omitted stable hook deps', () => {
+        const { events } = compileKotlinMjs(`import { useCallback, useRef } from 'react';
+import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';
+import { constructCallableReference23y65rf941mch as constructCallableReference } from './reflectRuntime.mjs';
+export function useAction(value, enabled) {
+  enabled = enabled === VOID ? true : enabled;
+  'use memo';
+  var service = useStableService();
+  var opRef = useRef(null);
+  useEffect([value, enabled], useAction$slambda(value, opRef));
+  return useCallback(() => service.run(value, enabled, 1000n), [value, enabled]);
+}
+function useAction$slambda($value, $opRef) {
+  return constructCallableReference(($this$useEffect, $completion) => {
+    $opRef.current = $value;
+  }, 1);
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+    });
+
     test('respects preserveExistingMemoizationGuarantees: true when explicitly enabled', () => {
         const input = `import { useCallback } from 'react';
 export function useAction(value) {

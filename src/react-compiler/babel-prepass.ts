@@ -4,12 +4,81 @@
  * Babel pre-pass for the Kotlin/JS rewrites that need scope analysis; `normalize.ts` does the textual ones.
  * It runs in `pre`, so `babel-plugin-react-compiler` sees its result in the same Babel pass.
  */
-export function babelPrepass() {
+export function babelPrepass({ types: t }: { types: any }) {
     return {
         pre(file: { path: any }) {
+            file.path.traverse({
+                Function(fn: any) {
+                    rewriteDefaultParams(fn, t);
+                },
+            });
             uniqueBindingNames(file.path);
         },
     };
+}
+
+/**
+ * Kotlin default arguments reassign the parameter, which the compiler rejects in hooks ("This value cannot be modified"):
+ * `x = x === VOID ? d : x;` / `if (x === VOID) { x = d; }` → `let x = _x === VOID ? d : _x;`, the parameter renamed to `_x`.
+ */
+function rewriteDefaultParams(fn: any, t: any) {
+    if (!t.isBlockStatement(fn.node.body)) return;
+    let rewritten = false;
+    for (const statement of fn.get('body.body')) {
+        if (isInitPropertiesCall(statement.node, t)) continue;
+        const guard = voidGuard(statement.node, t);
+        const index = guard ? fn.node.params.findIndex((param: any) => t.isIdentifier(param, { name: guard.name })) : -1;
+        if (!guard || index < 0) break;
+        const raw = fn.scope.generateUidIdentifier(guard.name);
+        fn.get(`params.${index}`).replaceWith(raw);
+        const isVoid = t.binaryExpression('===', t.cloneNode(raw), t.identifier('VOID'));
+        statement.replaceWith(t.variableDeclaration('let', [
+            t.variableDeclarator(t.identifier(guard.name), t.conditionalExpression(isVoid, guard.value, t.cloneNode(raw))),
+        ]));
+        rewritten = true;
+    }
+    if (rewritten) fn.scope.crawl();
+}
+
+function isInitPropertiesCall(statement: any, t: any): boolean {
+    return t.isExpressionStatement(statement) &&
+        t.isCallExpression(statement.expression) &&
+        t.isIdentifier(statement.expression.callee) &&
+        statement.expression.callee.name.startsWith('_init_properties_');
+}
+
+/** `x = x === VOID ? d : x;` or `if (x === VOID) { x = d; }` → `{ name: 'x', value: d }`. */
+function voidGuard(statement: any, t: any): { name: string; value: any } | undefined {
+    const assignmentIn = (node: any) =>
+        t.isExpressionStatement(node) && t.isAssignmentExpression(node.expression, { operator: '=' }) && t.isIdentifier(node.expression.left)
+            ? node.expression
+            : undefined;
+    const isVoidTest = (test: any, name: string) =>
+        t.isBinaryExpression(test, { operator: '===' }) && t.isIdentifier(test.left, { name }) && t.isIdentifier(test.right, { name: 'VOID' });
+
+    let guard: { name: string; value: any } | undefined;
+    const assignment = assignmentIn(statement);
+    if (assignment) {
+        const { left, right } = assignment;
+        if (t.isConditionalExpression(right) && isVoidTest(right.test, left.name) && t.isIdentifier(right.alternate, { name: left.name })) {
+            guard = { name: left.name, value: right.consequent };
+        }
+    } else if (t.isIfStatement(statement) && !statement.alternate) {
+        const body = t.isBlockStatement(statement.consequent) ? statement.consequent.body : [statement.consequent];
+        const inner = body.length === 1 ? assignmentIn(body[0]) : undefined;
+        if (inner && isVoidTest(statement.test, inner.left.name)) guard = { name: inner.left.name, value: inner.right };
+    }
+    // A default reading its own parameter would read the new `let` before initialization.
+    return guard && !mentions(guard.value, guard.name, t) ? guard : undefined;
+}
+
+/** Whether any identifier in `node` is named `name`, property keys included. */
+function mentions(node: any, name: string, t: any): boolean {
+    let found = false;
+    t.traverseFast(node, (child: any) => {
+        if (t.isIdentifier(child, { name })) found = true;
+    });
+    return found;
 }
 
 /**
