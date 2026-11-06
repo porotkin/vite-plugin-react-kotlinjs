@@ -6,6 +6,7 @@ import type {
     Expression,
     Function,
     FunctionBody,
+    IdentifierReference,
     Program,
     Span,
     Statement,
@@ -30,7 +31,7 @@ type Body = Array<Directive | Statement>;
  * - `var` → `let`
  * - `_` prefix on synthetic `use*$` / `Component$lambda$` helpers
  * - indexed `useState` / `useTransition` results → array destructuring
- * - lifted `useMemo` / `useCallback` / `useEffect` callbacks → inline arrows
+ * - lifted `useMemo` / `useCallback` / `useEffect` callbacks, also hoisted as `let tmp = () => ...`, → inline arrows
  * - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
  * - trailing `return Unit_getInstance()` dropped from effects
  * - `"use memo"` moved back to the top of a function body
@@ -44,7 +45,9 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
     // Leaf edits are token-level and are replayed when a lifted callback is copied inline.
     const structural: TextEdit[] = [];
     const leaf: TextEdit[] = [];
-    const inlined: Array<{ reference: Span; fn: Function }> = [];
+    const inlined: Array<{ reference: Span; fn: AnyFunction }> = [];
+    // `let tmp = () => ...` declarations to inline, by the hook argument referencing them.
+    const hoisted = new Map<IdentifierReference, ArrowFunctionExpression>();
 
     const hoistUseMemo = (fn: AnyFunction) => {
         if (fn.body?.type === 'BlockStatement') leaf.push(...useMemoHoist(code, fn.body));
@@ -66,7 +69,7 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
 
             if (!scope.isReactHook(node.callee, CALLBACK_HOOKS)) return;
             const callback = node.arguments[0];
-            const lifted = callback?.type === 'Identifier' ? scope.functions.get(callback.name) : undefined;
+            const lifted = callback?.type === 'Identifier' ? hoisted.get(callback) ?? scope.functions.get(callback.name) : undefined;
             const inlinable = lifted && !lifted.generator && !lifted.async ? lifted : undefined;
             const fn = inlinable ?? (callback?.type === 'ArrowFunctionExpression' ? callback : undefined);
             if (fn && scope.importOf(node.callee)?.name === 'useEffect') leaf.push(...dropTrailingUnitReturn(fn, scope));
@@ -74,6 +77,10 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
         },
         BlockStatement(node) {
             structural.push(...destructureStateHooks(node.body, scope));
+            for (const { declaration, reference, arrow } of hoistedCallbacks(node.body, scope)) {
+                structural.push({ start: declaration.start, end: declaration.end, text: '' });
+                hoisted.set(reference, arrow);
+            }
         },
     }).visit(program);
 
@@ -193,6 +200,35 @@ function useMemoHoist(code: string, body: FunctionBody): TextEdit[] {
     ];
 }
 
+/** `var tmp = () => ...;` directly followed by a statement passing `tmp` as the callback of a React callback hook. */
+function hoistedCallbacks(statements: Body, scope: ModuleScope) {
+    const found: Array<{ declaration: Span; reference: IdentifierReference; arrow: ArrowFunctionExpression }> = [];
+    for (let i = 0; i < statements.length - 1; i++) {
+        const declarator = singleDeclarator(statements[i]);
+        const call = statementValue(statements[i + 1]);
+        const reference = call?.type === 'CallExpression' ? call.arguments[0] : undefined;
+        if (
+            declarator?.init?.type === 'ArrowFunctionExpression' &&
+            call?.type === 'CallExpression' &&
+            scope.isReactHook(call.callee, CALLBACK_HOOKS) &&
+            reference?.type === 'Identifier' &&
+            reference.name === declarator.id.name
+        ) {
+            found.push({ declaration: statements[i], reference, arrow: declarator.init });
+        }
+    }
+    return found;
+}
+
+/** The value of `var x = e`, `return e`, `x = e` or `e;`. */
+function statementValue(statement: Directive | Statement): Expression | null | undefined {
+    if (statement.type === 'ReturnStatement') return statement.argument;
+    if (statement.type === 'ExpressionStatement') {
+        return statement.expression.type === 'AssignmentExpression' ? statement.expression.right : statement.expression;
+    }
+    return singleDeclarator(statement)?.init;
+}
+
 function syntheticHelperRenames(functions: Map<string, unknown>) {
     return new Map(
         [...functions.keys()]
@@ -209,8 +245,9 @@ function dropTrailingUnitReturn(fn: AnyFunction, scope: ModuleScope): TextEdit[]
         : [];
 }
 
-/** Renders a hoisted function declaration as an arrow, keeping the leaf edits made inside it. */
-function toArrow(code: string, fn: Function, leaf: TextEdit[]): string {
+/** Renders a hoisted function declaration or arrow expression as an arrow, keeping the leaf edits made inside it. */
+function toArrow(code: string, fn: AnyFunction, leaf: TextEdit[]): string {
+    if (fn.type === 'ArrowFunctionExpression') return applyEdits(code, leaf, fn.start, fn.end);
     const params = fn.params.map((param) => applyEdits(code, leaf, param.start, param.end));
     return `(${params.join(', ')}) => ${applyEdits(code, leaf, fn.body!.start, fn.body!.end)}`;
 }

@@ -223,8 +223,8 @@ function usePopupSettings(item) {
   'use memo';
   let settings = useMemo(() => getPopupSettings$ref()(), []);
   let service = useService('admin', AdminService$_init_$ref());
-  let tmp = () => item.id;
-  let cb = useCallback(tmp, [item]);
+
+  let cb = useCallback(() => item.id, [item]);
   return [settings, service, cb];
 }
 function getPopupSettings$ref() {
