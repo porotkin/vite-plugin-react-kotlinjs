@@ -1,4 +1,4 @@
-import {DEFAULT_COMPILATION_MODE, type ReactCompilerOptions} from '../options';
+import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerOptions} from '../options';
 import {projectRequire} from '../shared/project';
 import {normalizeKotlinMjs} from './normalize';
 
@@ -23,11 +23,14 @@ const jsxFunction = {
     returnValueKind: 'frozen',
 };
 
+const reactJsxRuntime = { kind: 'object', properties: { jsx: jsxFunction, jsxs: jsxFunction } };
+// Kotlin/JS imports kotlin-react's `jsx()` under a mangled name (`jsx2uf3lx2x6pvok`), so `'*'` types every export.
+const kotlinJsxRuntime = { kind: 'object', properties: { '*': jsxFunction } };
+
 /** Kotlin/JS calls `jsx()` / `jsxs()` directly, so the compiler is told they freeze props and return frozen values. */
 export function moduleTypeProvider(moduleName: string) {
-    return moduleName === 'react/jsx-runtime'
-        ? { kind: 'object', properties: { jsx: jsxFunction, jsxs: jsxFunction } }
-        : null;
+    if (moduleName === 'react/jsx-runtime') return reactJsxRuntime;
+    return moduleName.endsWith(KOTLIN_JSX_RUNTIME) ? kotlinJsxRuntime : null;
 }
 
 /**

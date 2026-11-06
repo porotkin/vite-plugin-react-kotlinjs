@@ -320,6 +320,20 @@ export {
         );
     });
 
+    test('recognizes lowered components importing kotlin-react/react/jsx/runtime/jsx.mjs', () => {
+        const input = `import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+function get_SidebarButton() {
+  return SidebarButton;
+}
+export {
+  get_SidebarButton as get_SidebarButton15b2kywczw443,
+};`;
+        assert.match(
+            fastRefresh.transform.handler(input, 'SidebarButton.mjs').code,
+            /function GetSidebarButton\(\) \{[\s\S]*GetSidebarButton as get_SidebarButton15b2kywczw443[\s\S]*react\/jsx-dev-runtime/,
+        );
+    });
+
     test('skips modules without a component getter', () => {
         assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
     });
