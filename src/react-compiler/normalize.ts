@@ -39,6 +39,7 @@ type Body = Array<Directive | Statement>;
  * - `BigInt` literals (`1000n`) → `BigInt('1000')`
  * - trailing `return Unit_getInstance()` dropped from effects
  * - `"use memo"` moved back to the top of a function body
+ * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`).
  */
 export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
     const { program } = parseSync(filename, code, { lang: 'js' });

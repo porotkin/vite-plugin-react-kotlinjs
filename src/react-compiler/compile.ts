@@ -1,5 +1,6 @@
 import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerOptions} from '../options';
 import {projectRequire} from '../shared/project';
+import {babelPrepass} from './babel-prepass';
 import {normalizeKotlinMjs} from './normalize';
 
 export interface ReactCompilerEvent {
@@ -33,31 +34,6 @@ export function moduleTypeProvider(moduleName: string) {
     return moduleName.endsWith(KOTLIN_JSX_RUNTIME) ? kotlinJsxRuntime : null;
 }
 
-/**
- * Renames repeated binding names inside each top-level function so no two of its bindings share a name.
- * For a shadowed name the compiler renames the later binding to `<name>_<n>` without checking that this name is free
- * (`HIRBuilder.resolveBinding`), while Kotlin/JS names its temporaries exactly that way (`tmp`, `tmp_0`): a bail-out
- * then leaves two `let tmp_0` declarations behind, and a successful compile silently merges two variables into one.
- */
-const uniqueBindingNames = {
-    pre(file: { path: any }) {
-        file.path.traverse({
-            Function(fn: any) {
-                const scopes = new Set([fn.scope]);
-                fn.traverse({Scopable: (path: any) => void scopes.add(path.scope)});
-                const names = new Set<string>();
-                for (const scope of scopes) {
-                    for (const name of Object.keys(scope.bindings)) {
-                        if (names.has(name)) scope.rename(name);
-                        else names.add(name);
-                    }
-                }
-                fn.skip();
-            },
-        });
-    },
-};
-
 let toolchain: { babel: any; reactCompiler: any } | undefined;
 
 /** Lazy: `@babel/core` and `babel-plugin-react-compiler` are only required when the compiler actually runs. */
@@ -89,7 +65,7 @@ export function compileKotlinMjs(
         babelrc: false,
         comments: false,
         plugins: [
-            uniqueBindingNames,
+            babelPrepass,
             [
                 reactCompiler,
                 {
