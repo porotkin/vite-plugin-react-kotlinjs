@@ -1,6 +1,7 @@
 import type {
     ArrowFunctionExpression,
     BindingIdentifier,
+    CallExpression,
     Directive,
     Expression,
     Function,
@@ -78,6 +79,7 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
 }
 
 type ModuleScope = ReturnType<typeof analyzeModule>;
+type CallsHelper = (node: Expression | null | undefined, prefix: string) => node is CallExpression;
 
 /** Top-level named imports and function declarations of a module. */
 function analyzeModule(body: Program['body']) {
@@ -98,15 +100,19 @@ function analyzeModule(body: Program['body']) {
     }
 
     const importOf = (node: Expression | null | undefined) => (node?.type === 'Identifier' ? imports.get(node.name) : undefined);
+    // Kotlin/JS mangles imported names (`Unit_getInstanceu5z48rdn3d6z`), so its runtime helpers are matched by prefix.
+    const callsHelper: CallsHelper = (node, prefix): node is CallExpression =>
+        node?.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        (node.callee.name.startsWith(prefix) || Boolean(importOf(node.callee)?.name.startsWith(prefix)));
+
     return {
         functions,
         importOf,
+        callsHelper,
         isReactHook(node: Expression, hooks: Set<string>) {
             const binding = importOf(node);
             return binding?.source === 'react' && hooks.has(binding.name);
-        },
-        isUnitInstanceCall(node: Expression | null) {
-            return node?.type === 'CallExpression' && Boolean(importOf(node.callee)?.name.startsWith('Unit_getInstance'));
         },
     };
 }
@@ -140,7 +146,7 @@ function syntheticHelperRenames(functions: Map<string, unknown>) {
 /** An effect may only return a cleanup function, never Kotlin's `Unit`. */
 function dropTrailingUnitReturn(fn: AnyFunction, scope: ModuleScope): TextEdit[] {
     const last = fn.body?.type === 'BlockStatement' ? fn.body.body.at(-1) : undefined;
-    return last?.type === 'ReturnStatement' && scope.isUnitInstanceCall(last.argument)
+    return last?.type === 'ReturnStatement' && scope.callsHelper(last.argument, 'Unit_getInstance')
         ? [{ start: last.start, end: last.end, text: '' }]
         : [];
 }
