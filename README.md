@@ -108,29 +108,40 @@ Output debug information about the transformed files.
    `rolldown/utils`) to normalize the Kotlin/JS `.mjs` output:
    - `var` → `let` (Kotlin/JS emits `let` / `const` itself starting with Kotlin 2.5.20,
      see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348))
-   - indexed `useState` / `useTransition` results → array destructuring
+   - indexed `useState` / `useTransition` results → array destructuring\
+     `var t = useState(0); var a = t[0]; var b = t[1];` → `let [a, b] = useState(0);`
    - `_` prefix on synthetic `use*$lambda` / `Component$lambda$` helpers, so they aren't mistaken for hooks or
-     components
-   - lifted `useMemo` / `useCallback` / `useEffect` callbacks (also hoisted as `let tmp = () => ...`) → inline arrows
-   - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
-   - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
-   - `BigInt` literals (`1000n`) → `BigInt('1000')`
-   - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks
-   - `"use memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling
+     components\
+     `useFoo$lambda` → `_useFoo$lambda`
+   - lifted `useMemo` / `useCallback` / `useEffect` callbacks (also hoisted as `let tmp = () => ...`) → inline arrows\
+     `useMemo(useFoo$lambda, [])` → `useMemo(() => { /* useFoo$lambda body */ }, [])`
+   - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows\
+     `useMemo(get$ref(), [])` → `useMemo(() => get$ref()(), [])`
+   - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes\
+     `invoke$lambda(x$delegate)` → `x$delegate.current`
+   - `BigInt` literals → `BigInt` string calls\
+     `1000n` → `BigInt('1000')`
+   - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks\
+     `() => { f(); return Unit_getInstance(); }` → `() => { f(); }`
+   - `"use memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling\
+     `_init_properties_X_kt(); 'use memo';` → `'use memo'; _init_properties_X_kt();`
 
    Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
    `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX runtime return frozen values. Before the compiler
    runs, a Babel pre-pass applies the rewrites that need scope analysis:
-   - Kotlin default arguments (`x = x === VOID ? d : x`) → `let x = _x === VOID ? d : _x`, since the compiler rejects
-     reassigned hook parameters
-   - `props.ref` in `"use memo"` components → a `let { ref: _ref } = props` local, since the compiler rejects the
-     property load as a ref access during render
+    - Kotlin default arguments → `let` locals, since the compiler rejects reassigned hook parameters\
+      `x = x === VOID ? d : x` → `let x = _x === VOID ? d : _x`
+    - `props.ref` in `"use memo"` components → a destructured local, since the compiler rejects the property load as a
+      ref access during render\
+      `f(props.ref)` → `let { ref: _ref } = props; f(_ref)`
    - repeated binding names inside each top-level function are renamed apart: the compiler renames a shadowed `tmp` to
-     `tmp_0` without checking that the name is free, which collides with Kotlin's own `tmp_0` temporaries
+     `tmp_0` without checking that the name is free, which collides with Kotlin's own `tmp_0` temporaries\
+     shadowing inner `tmp` → `_tmp`
 2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
    the official Vite React plugin can apply React Fast Refresh:
-   - the exported `get_X()` component getter → `GetX()`, so React Refresh registers it as a component (the export name
-     stays `get_X`)
+    - the exported component getter is renamed so React Refresh registers it as a component (the export name stays
+      `get_X`)\
+      `function get_X()` → `function GetX()`
    - a `react/jsx-dev-runtime` marker is appended, since `@vitejs/plugin-react` only injects Fast Refresh into modules
      that mention it
 
