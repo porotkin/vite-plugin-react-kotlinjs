@@ -6,6 +6,45 @@ const normalize = (code) => normalizeKotlinMjs(code).replace(/[ \t]+$/gm, '');
 
 const normalizeCases = [
     {
+        name: 'moves "use memo" above Kotlin default arguments and property initialization',
+        input: `function Badge$lambda(props, compact) {
+  compact = compact === VOID ? false : compact;
+  _init_properties_Badge_kt__d9zukm();
+  'use memo';
+  return props.label;
+}`,
+        expected: `function Badge$lambda(props, compact) {
+  'use memo';
+  compact = compact === VOID ? false : compact;
+  _init_properties_Badge_kt__d9zukm();
+
+  return props.label;
+}`,
+    },
+
+    {
+        name: 'keeps the hoisted "use memo" when the statement it moves above is rewritten too',
+        input: `function Badge$lambda(props){var label = props.label; 'use memo'; return label;}`,
+        expected: `function Badge$lambda(props){
+  'use memo';let label = props.label;  return label;}`,
+    },
+
+    {
+        name: 'hoists "use memo" in lowered arrow component lambdas',
+        input: `const Dialog = Popup((props) => {
+  _init_properties_Dialog_kt__a1b2c3();
+  'use memo';
+  return jsx('div', { children: props.title });
+});`,
+        expected: `const Dialog = Popup((props) => {
+  'use memo';
+  _init_properties_Dialog_kt__a1b2c3();
+
+  return jsx('div', { children: props.title });
+});`,
+    },
+
+    {
         name: 'destructures useState and inlines a lifted useEffect callback',
         input: `import { useState, useEffect } from 'react';
 import { Unit_getInstance3abc as Unit_getInstance } from './stdlib.mjs';
@@ -268,6 +307,21 @@ export function Foo(props) {
   return jsx('div', { onClick: cb, title: tmp, id: tmp_0 });
 }`;
     const assignedFrom = (code, value) => new RegExp(`(\\w+) = ${value.replace('.', '\\.')};`).exec(code)?.[1];
+
+    test('compiles a component whose "use memo" follows Kotlin property initialization', () => {
+        const { code, events } = compileKotlinMjs(`import { jsx } from 'react/jsx-runtime';
+var initialized;
+function _init_properties_Badge_kt__d9zukm() {
+  initialized = true;
+}
+export function Badge$lambda(props) {
+  _init_properties_Badge_kt__d9zukm();
+  'use memo';
+  return jsx('div', { title: props.label });
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /react\/compiler-runtime/);
+    });
 
     test('keeps shadowed Kotlin temporaries apart when compiled', () => {
         const {code, events} = compileKotlinMjs(shadowedTemporaries(''));

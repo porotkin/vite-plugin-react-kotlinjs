@@ -4,6 +4,7 @@ import type {
     Directive,
     Expression,
     Function,
+    FunctionBody,
     Program,
     Span,
     Statement,
@@ -19,6 +20,8 @@ const CALLBACK_HOOKS = new Set(['useMemo', 'useCallback', 'useEffect']);
 // Kotlin names lambdas `useFoo$...` / `Component$lambda$...`; the compiler would mistake them for hooks/components.
 const SYNTHETIC_HELPER = /^(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$/;
 
+type AnyFunction = Function | ArrowFunctionExpression;
+
 /**
  * Rewrites Kotlin/JS output into code `babel-plugin-react-compiler` can analyse:
  * - `var` → `let`
@@ -26,6 +29,7 @@ const SYNTHETIC_HELPER = /^(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$/;
  * - indexed `useState` / `useTransition` results → array destructuring
  * - lifted `useMemo` / `useCallback` / `useEffect` callbacks → inline arrows
  * - trailing `return Unit_getInstance()` dropped from effects
+ * - `"use memo"` moved back to the top of a function body
  */
 export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
     const { program } = parseSync(filename, code, { lang: 'js' });
@@ -38,7 +42,14 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
     const leaf: TextEdit[] = [];
     const inlined: Array<{ reference: Span; fn: Function }> = [];
 
+    const hoistUseMemo = (fn: AnyFunction) => {
+        if (fn.body?.type === 'BlockStatement') leaf.push(...useMemoHoist(code, fn.body));
+    };
+
     new Visitor({
+        FunctionDeclaration: hoistUseMemo,
+        FunctionExpression: hoistUseMemo,
+        ArrowFunctionExpression: hoistUseMemo,
         VariableDeclaration(node) {
             if (node.kind === 'var') leaf.push({ start: node.start, end: node.start + 3, text: 'let' });
         },
@@ -100,6 +111,24 @@ function analyzeModule(body: Program['body']) {
     };
 }
 
+/**
+ * Kotlin/JS emits `_init_properties_<File>_kt()` and default-argument handling at the start of a function,
+ * pushing `"use memo"` below them, where it is a plain expression statement instead of a directive.
+ */
+function useMemoHoist(code: string, body: FunctionBody): TextEdit[] {
+    const misplaced = body.body.find((statement) =>
+        statement.type === 'ExpressionStatement' &&
+        !('directive' in statement) &&
+        statement.expression.type === 'Literal' &&
+        statement.expression.value === 'use memo');
+    if (!misplaced) return [];
+    const indent = code.slice(body.start + 1, body.body[0].start) || '\n  ';
+    return [
+        { start: body.start + 1, end: body.start + 1, text: `${indent}'use memo';` },
+        { start: misplaced.start, end: misplaced.end, text: '' },
+    ];
+}
+
 function syntheticHelperRenames(functions: Map<string, unknown>) {
     return new Map(
         [...functions.keys()]
@@ -109,7 +138,7 @@ function syntheticHelperRenames(functions: Map<string, unknown>) {
 }
 
 /** An effect may only return a cleanup function, never Kotlin's `Unit`. */
-function dropTrailingUnitReturn(fn: Function | ArrowFunctionExpression, scope: ModuleScope): TextEdit[] {
+function dropTrailingUnitReturn(fn: AnyFunction, scope: ModuleScope): TextEdit[] {
     const last = fn.body?.type === 'BlockStatement' ? fn.body.body.at(-1) : undefined;
     return last?.type === 'ReturnStatement' && scope.isUnitInstanceCall(last.argument)
         ? [{ start: last.start, end: last.end, text: '' }]
