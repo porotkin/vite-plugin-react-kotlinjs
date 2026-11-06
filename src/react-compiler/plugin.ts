@@ -5,7 +5,8 @@ import { compileKotlinMjs } from './compile';
 const USE_MEMO_DIRECTIVE = /["']use memo["']/;
 
 /** Compiles modules opting in with `"use memo"`, plus every React module unless in `annotation` mode. */
-export function reactCompilerPlugin({ compilationMode, include, isReactFC, reactModuleMarkers, debug }: ResolvedOptions) {
+export function reactCompilerPlugin(options: ResolvedOptions) {
+    const { compilationMode, include, isReactFC, reactModuleMarkers, debug } = options;
     const annotationOnly = compilationMode === 'annotation';
     return createTransformPlugin({
         name: 'kotlin-react-compiler',
@@ -15,7 +16,7 @@ export function reactCompilerPlugin({ compilationMode, include, isReactFC, react
             : reactModuleMarkers && [USE_MEMO_DIRECTIVE, ...reactModuleMarkers],
         transform: (code, id) =>
             USE_MEMO_DIRECTIVE.test(code) || (!annotationOnly && isReactFC(code))
-                ? compileKotlinMjs(code, id, { compilationMode }).code
+                ? compileKotlinMjs(code, id, options).code
                 : undefined,
         debug,
     });

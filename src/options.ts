@@ -2,6 +2,13 @@ export type CompilationMode = 'annotation' | 'infer' | 'syntax' | 'all';
 
 export interface ReactCompilerOptions {
     compilationMode?: CompilationMode;
+    /**
+     * Whether to enforce and preserve manual `useMemo` / `useCallback` memoization guarantees.
+     * Defaults to `false` so Kotlin/JS hooks omitting stable hook dependencies do not bail out;
+     * when `false`, React Compiler infers its own memoization dependencies rather than preserving
+     * deliberately incomplete manual dependency lists.
+     */
+    preserveExistingMemoizationGuarantees?: boolean;
     include?: Array<string | RegExp>;
 }
 
@@ -28,6 +35,10 @@ export function resolveOptions(options: Options) {
     return {
         reactCompiler: options.reactCompiler !== false,
         compilationMode: overrides.compilationMode ?? options.compilationMode ?? DEFAULT_COMPILATION_MODE,
+        preserveExistingMemoizationGuarantees:
+            overrides.preserveExistingMemoizationGuarantees ??
+            options.preserveExistingMemoizationGuarantees ??
+            false,
         include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
         // A custom `isReactFC` may accept modules without the default markers, so those can't be pre-filtered.

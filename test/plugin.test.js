@@ -282,6 +282,20 @@ export function Foo(props) {
         projectRequire('@babel/core').parseSync(code, {sourceType: 'module', configFile: false, babelrc: false});
         assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
     });
+
+    test('respects preserveExistingMemoizationGuarantees: true when explicitly enabled', () => {
+        const input = `import { useCallback } from 'react';
+export function useAction(value) {
+  'use memo';
+  var service = useStableService();
+  return useCallback(() => service.run(value), [value]);
+}`;
+        assert.deepEqual(compileKotlinMjs(input).events.map((e) => e.kind), ['CompileSuccess']);
+        assert.deepEqual(
+            compileKotlinMjs(input, 'module.mjs', { preserveExistingMemoizationGuarantees: true }).events.map((e) => e.kind),
+            ['CompileError'],
+        );
+    });
 });
 
 describe('fast refresh plugin', () => {

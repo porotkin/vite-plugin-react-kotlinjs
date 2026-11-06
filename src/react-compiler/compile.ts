@@ -72,7 +72,10 @@ function loadToolchain() {
 export function compileKotlinMjs(
     code: string,
     filename = 'module.mjs',
-    { compilationMode = DEFAULT_COMPILATION_MODE }: ReactCompilerOptions = {},
+    {
+        compilationMode = DEFAULT_COMPILATION_MODE,
+        preserveExistingMemoizationGuarantees = false,
+    }: ReactCompilerOptions = {},
 ): CompileKotlinMjsResult {
     const { babel, reactCompiler } = loadToolchain();
     const events: ReactCompilerEvent[] = [];
@@ -89,7 +92,11 @@ export function compileKotlinMjs(
                 {
                     compilationMode,
                     panicThreshold: 'none',
-                    environment: { moduleTypeProvider },
+                    environment: {
+                        moduleTypeProvider,
+                        enablePreserveExistingMemoizationGuarantees: preserveExistingMemoizationGuarantees,
+                        validatePreserveExistingMemoizationGuarantees: preserveExistingMemoizationGuarantees,
+                    },
                     logger: { logEvent: (_filename: string, event: ReactCompilerEvent) => events.push(event) },
                 },
             ],
