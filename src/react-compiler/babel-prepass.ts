@@ -1,5 +1,6 @@
 // Babel is resolved from the Kotlin/JS project at runtime and ships no types here, so its paths and nodes are `any`.
 const COMPONENT_NAME = /^[A-Z]/;
+const SYNTHETIC_REF_IMPORT = /\$ref(?:[a-z0-9]{8,16})?$/;
 
 /**
  * Babel pre-pass for the Kotlin/JS rewrites that need scope analysis; `normalize.ts` does the textual ones.
@@ -8,6 +9,7 @@ const COMPONENT_NAME = /^[A-Z]/;
 export function babelPrepass({ types: t }: { types: any }) {
     return {
         pre(file: { path: any }) {
+            aliasSyntheticImports(file.path, t);
             file.path.traverse({
                 Function(fn: any) {
                     rewriteDefaultParams(fn, t);
@@ -17,6 +19,37 @@ export function babelPrepass({ types: t }: { types: any }) {
             uniqueBindingNames(file.path);
         },
     };
+}
+
+/**
+ * Production Kotlin/JS deduplicates callable-reference `$ref` helpers into the target's module and imports them
+ * (`import { useFoo$ref<hash> as useFoo$ref }`). Because `babel-plugin-react-compiler` treats any `ImportSpecifier`
+ * whose exported or local name starts with `use` as a hook, references to those helpers are routed through a
+ * `_`-prefixed module-local variable. Lifted `$slambda` helpers are intentionally excluded: they can be classes,
+ * and eagerly aliasing an imported class could read it during a module cycle before initialization.
+ */
+function aliasSyntheticImports(program: any, t: any) {
+    for (const statement of program.get('body')) {
+        if (!statement.isImportDeclaration()) continue;
+        for (const specifier of statement.get('specifiers')) {
+            if (!specifier.isImportSpecifier()) continue;
+            const local = specifier.node.local.name;
+            const imported = t.isIdentifier(specifier.node.imported)
+                ? specifier.node.imported.name
+                : specifier.node.imported.value;
+            if (!SYNTHETIC_REF_IMPORT.test(local) && !SYNTHETIC_REF_IMPORT.test(imported)) continue;
+            const binding = program.scope.getBinding(local);
+            if (!binding || binding.referencePaths.length === 0) continue;
+            const alias = program.scope.generateUidIdentifier(local);
+            for (const reference of [...binding.referencePaths]) {
+                reference.replaceWith(t.cloneNode(alias));
+            }
+            const [declaration] = statement.insertAfter(t.variableDeclaration('let', [
+                t.variableDeclarator(alias, t.identifier(local)),
+            ]));
+            program.scope.registerDeclaration(declaration);
+        }
+    }
 }
 
 /**

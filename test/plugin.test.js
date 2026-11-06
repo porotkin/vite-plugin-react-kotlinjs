@@ -548,6 +548,34 @@ export function useAction(value) {
             ['CompileError'],
         );
     });
+
+    test('aliases imported synthetic $ref helpers so conditional prop assignments do not fail hook rules', () => {
+        const { code, events } = compileKotlinMjs(`import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+import {
+  useComparisonLog$refb9aevfxnsp1k as useComparisonLog$ref,
+  useComparisonLog1fdlqot6w3m5v as useComparisonLog,
+} from './useComparisonLog.mjs';
+export function LogsLoader$lambda(props) {
+  _init_properties_LogsLoader_kt__kiakqq();
+  'use memo';
+  var isComparisonMode = useComparisonLog(props.id);
+  var tmp;
+  if (isComparisonMode) {
+    var attrs = {};
+    attrs.useData = useComparisonLog$ref();
+    tmp = jsx('div', attrs, '@rdk/23_8');
+  } else {
+    tmp = null;
+  }
+  return tmp;
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /useComparisonLog1fdlqot6w3m5v as useComparisonLog/);
+        assert.match(code, /useComparisonLog\(props\.id\)/);
+        assert.doesNotMatch(code, /let _useComparisonLog = useComparisonLog/);
+        assert.match(code, /let _useComparisonLog\$ref = useComparisonLog\$ref;/);
+        assert.match(code, /_useComparisonLog\$ref\(\)/);
+    });
 });
 
 describe('fast refresh plugin', () => {
