@@ -148,7 +148,7 @@ function _useSearchResults$lambda() {
     },
 
     {
-        name: 'prefixes hook lambdas and slambdas, leaves kotlin-react useEffect alone',
+        name: 'prefixes hook lambdas and wraps slambda hook arguments in inline arrows',
         input: `import { useState as useState } from 'react';
 import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';
 function usePolledItems(items, onTick) {
@@ -179,7 +179,7 @@ function usePolledItems(items, onTick) {
   let [tickCount, setTickCount] = useState(0);
 
 
-  useEffect([items, onTick], _usePolledItems$slambda(items, setTickCount, onTick));
+  useEffect([items, onTick], ($this$useEffect, $completion) => _usePolledItems$slambda(items, setTickCount, onTick)($this$useEffect, $completion));
   return to(items, () => {
     setTickCount(_usePolledItems$lambda$lambda);
     return Unit_getInstance();
@@ -196,6 +196,42 @@ function _usePolledItems$slambda$lambda(it) {
 }
 function _usePolledItems$lambda$lambda(it) {
   return it + 1 | 0;
+}`,
+    },
+
+    {
+        name: 'wraps $ref() calls for useMemo while preserving KCallable $ref metadata for custom hooks',
+        input: `import { useMemo as useMemo, useCallback as useCallback } from 'react';
+import { constructCallableReference23y65rf941mch as constructCallableReference } from './reflectRuntime.mjs';
+function usePopupSettings(item) {
+  'use memo';
+  var settings = useMemo(getPopupSettings$ref(), []);
+  var service = useService('admin', AdminService$_init_$ref());
+  var tmp = () => item.id;
+  var cb = useCallback(tmp, [item]);
+  return [settings, service, cb];
+}
+function getPopupSettings$ref() {
+  return constructCallableReference(() => createSettings(), 0, 0, 'sig', 'getPopupSettings');
+}
+function AdminService$_init_$ref() {
+  return constructCallableReference((http) => new AdminService(http), 1, 0, 'sig', '<init>');
+}`,
+        expected: `import { useMemo as useMemo, useCallback as useCallback } from 'react';
+import { constructCallableReference23y65rf941mch as constructCallableReference } from './reflectRuntime.mjs';
+function usePopupSettings(item) {
+  'use memo';
+  let settings = useMemo(() => getPopupSettings$ref()(), []);
+  let service = useService('admin', AdminService$_init_$ref());
+  let tmp = () => item.id;
+  let cb = useCallback(tmp, [item]);
+  return [settings, service, cb];
+}
+function getPopupSettings$ref() {
+  return constructCallableReference(() => createSettings(), 0, 0, 'sig', 'getPopupSettings');
+}
+function AdminService$_init_$ref() {
+  return constructCallableReference((http) => new AdminService(http), 1, 0, 'sig', '<init>');
 }`,
     },
 
