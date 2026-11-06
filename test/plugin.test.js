@@ -236,6 +236,61 @@ function AdminService$_init_$ref() {
     },
 
     {
+        name: 'inlines getLocalDelegateReference .current getters and setters',
+        input: `import { useRef as useRef } from 'react';
+import { getLocalDelegateReference2ls94nvl5ojb2 as getLocalDelegateReference } from './reflectRuntime.mjs';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from './Unit.mjs';
+function Carousel$lambda(props) {
+  _init_properties_Carousel_kt();
+  'use memo';
+  var isDragging$delegate = useRef(false);
+  var onMove = () => {
+    if (!invoke$lambda(isDragging$delegate)) {
+      invoke$lambda_0(isDragging$delegate, true);
+    }
+  };
+  return onMove;
+}
+function invoke$lambda($isDragging$delegate) {
+  _init_properties_Carousel_kt();
+  getLocalDelegateReference('isDragging', KMutableProperty0(), true);
+  return $isDragging$delegate.current;
+}
+function invoke$lambda_0($isDragging$delegate, _set____db54di) {
+  _init_properties_Carousel_kt();
+  getLocalDelegateReference('isDragging', KMutableProperty0(), true);
+  $isDragging$delegate.current = _set____db54di;
+  return Unit_getInstance();
+}`,
+        expected: `import { useRef as useRef } from 'react';
+import { getLocalDelegateReference2ls94nvl5ojb2 as getLocalDelegateReference } from './reflectRuntime.mjs';
+import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from './Unit.mjs';
+function Carousel$lambda(props) {
+  'use memo';
+  _init_properties_Carousel_kt();
+
+  let isDragging$delegate = useRef(false);
+  let onMove = () => {
+    if (!isDragging$delegate.current) {
+      (isDragging$delegate.current = true);
+    }
+  };
+  return onMove;
+}
+function invoke$lambda($isDragging$delegate) {
+  _init_properties_Carousel_kt();
+  getLocalDelegateReference('isDragging', KMutableProperty0(), true);
+  return $isDragging$delegate.current;
+}
+function invoke$lambda_0($isDragging$delegate, _set____db54di) {
+  _init_properties_Carousel_kt();
+  getLocalDelegateReference('isDragging', KMutableProperty0(), true);
+  $isDragging$delegate.current = _set____db54di;
+  return Unit_getInstance();
+}`,
+    },
+
+    {
         name: 'destructures indexed useState and .at() useTransition results',
         input: `import {
   useState as useState,

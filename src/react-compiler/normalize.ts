@@ -7,6 +7,8 @@ import type {
     Function,
     FunctionBody,
     IdentifierReference,
+    MemberExpression,
+    Node,
     Program,
     Span,
     Statement,
@@ -33,6 +35,7 @@ type Body = Array<Directive | Statement>;
  * - indexed `useState` / `useTransition` results → array destructuring
  * - lifted `useMemo` / `useCallback` / `useEffect` callbacks, also hoisted as `let tmp = () => ...`, → inline arrows
  * - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
+ * - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
  * - trailing `return Unit_getInstance()` dropped from effects
  * - `"use memo"` moved back to the top of a function body
  */
@@ -65,6 +68,11 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
         },
         CallExpression(node) {
+            const delegateAccess = delegateAccessEdits(node, scope);
+            if (delegateAccess.length > 0) {
+                leaf.push(...delegateAccess);
+                return;
+            }
             if (scope.isHookCall(node.callee)) leaf.push(...callableRefWraps(node, scope));
 
             if (!scope.isReactHook(node.callee, CALLBACK_HOOKS)) return;
@@ -119,15 +127,19 @@ function analyzeModule(body: Program['body']) {
         (node.callee.name.startsWith(prefix) || Boolean(importOf(node.callee)?.name.startsWith(prefix)));
 
     const callableRefs = new Map<string, CallableRef>();
+    const delegateAccessors = new Map<string, DelegateAccess>();
     for (const [name, fn] of functions) {
         const statements = (fn.body?.body ?? []).filter((statement) => !isInitPropertiesCall(statement));
         const callableRef = matchCallableRef(statements, callsHelper);
         if (callableRef) callableRefs.set(name, callableRef);
+        const access = matchDelegateAccessor(fn.params, statements, callsHelper);
+        if (access) delegateAccessors.set(name, access);
     }
 
     return {
         functions,
         callableRefs,
+        delegateAccessors,
         importOf,
         callsHelper,
         isHookCall(node: Expression) {
@@ -163,6 +175,67 @@ function matchCallableRef(statements: Body, callsHelper: CallsHelper): CallableR
     if (!callsHelper(call, 'constructCallableReference') || call.arguments[0]?.type !== 'ArrowFunctionExpression') return undefined;
     const params = call.arguments[0].params.map((param, i) => (param.type === 'Identifier' ? param.name : `$p${i}`));
     return { params: params.join(', '), hasMetadata: call.arguments.length > 2 };
+}
+
+type DelegateAccess = 'get' | 'set';
+
+/**
+ * Accessors of a Kotlin local delegate (`var x by useRef(...)`):
+ * - `get(d) { getLocalDelegateReference(...); return d.current; }`
+ * - `set(d, v) { getLocalDelegateReference(...); d.current = v; return Unit_getInstance(); }`
+ */
+function matchDelegateAccessor(params: Function['params'], statements: Body, callsHelper: CallsHelper): DelegateAccess | undefined {
+    const [reference, first, second] = statements;
+    const [delegate, value] = params;
+    if (reference?.type !== 'ExpressionStatement' || !callsHelper(reference.expression, 'getLocalDelegateReference')) return undefined;
+    if (delegate?.type !== 'Identifier') return undefined;
+
+    if (params.length === 1 && statements.length === 2 && first.type === 'ReturnStatement') {
+        return isMemberAccess(first.argument, delegate.name, 'current') ? 'get' : undefined;
+    }
+    const assignment = first?.type === 'ExpressionStatement' && first.expression.type === 'AssignmentExpression' ? first.expression : undefined;
+    return params.length === 2 &&
+        statements.length === 3 &&
+        value.type === 'Identifier' &&
+        assignment?.operator === '=' &&
+        isMemberAccess(assignment.left, delegate.name, 'current') &&
+        assignment.right.type === 'Identifier' &&
+        assignment.right.name === value.name &&
+        second.type === 'ReturnStatement' &&
+        callsHelper(second.argument, 'Unit_getInstance')
+        ? 'set'
+        : undefined;
+}
+
+function isMemberAccess(node: Node | null | undefined, objectName: string, propertyName: string): node is MemberExpression {
+    return (
+        node?.type === 'MemberExpression' &&
+        !node.computed &&
+        !node.optional &&
+        node.object.type === 'Identifier' &&
+        node.object.name === objectName &&
+        node.property.name === propertyName
+    );
+}
+
+/** `get(d)` → `d.current` and `set(d, v)` → `(d.current = v)` for Kotlin delegate accessors. */
+function delegateAccessEdits(call: CallExpression, scope: ModuleScope): TextEdit[] {
+    const access = call.callee.type === 'Identifier' ? scope.delegateAccessors.get(call.callee.name) : undefined;
+    const [target, value] = call.arguments;
+    if (access === 'get' && call.arguments.length === 1) {
+        return [
+            { start: call.start, end: target.start, text: '' },
+            { start: target.end, end: call.end, text: '.current' },
+        ];
+    }
+    if (access === 'set' && call.arguments.length === 2) {
+        return [
+            { start: call.start, end: target.start, text: '(' },
+            { start: target.end, end: value.start, text: '.current = ' },
+            { start: value.end, end: call.end, text: ')' },
+        ];
+    }
+    return [];
 }
 
 /**
