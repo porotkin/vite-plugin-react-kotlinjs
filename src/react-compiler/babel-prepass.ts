@@ -1,4 +1,5 @@
 // Babel is resolved from the Kotlin/JS project at runtime and ships no types here, so its paths and nodes are `any`.
+const COMPONENT_NAME = /^[A-Z]/;
 
 /**
  * Babel pre-pass for the Kotlin/JS rewrites that need scope analysis; `normalize.ts` does the textual ones.
@@ -10,6 +11,7 @@ export function babelPrepass({ types: t }: { types: any }) {
             file.path.traverse({
                 Function(fn: any) {
                     rewriteDefaultParams(fn, t);
+                    destructurePropsRef(fn, t);
                 },
             });
             uniqueBindingNames(file.path);
@@ -79,6 +81,53 @@ function mentions(node: any, name: string, t: any): boolean {
         if (t.isIdentifier(child, { name })) found = true;
     });
     return found;
+}
+
+/**
+ * In a `"use memo"` component, `props.ref` → a `let { ref: _ref } = props` local: the compiler rejects the property
+ * load as a ref access during render (e.g. when the ref is passed to a hook), but accepts the destructured value.
+ */
+function destructurePropsRef(fn: any, t: any) {
+    const [props] = fn.node.params;
+    if (fn.node.params.length !== 1 || !t.isIdentifier(props)) return;
+    if (!fn.node.body.directives?.some((directive: any) => directive.value.value === 'use memo')) return;
+    const name = fn.node.id?.name ?? (fn.parentPath.isVariableDeclarator() ? fn.parent.id.name : undefined);
+    if (name && !COMPONENT_NAME.test(name)) return;
+
+    const binding = fn.scope.getBinding(props.name);
+    const reads = binding.constantViolations.length === 0 ? propsRefReads(binding, t) : [];
+    if (reads.length === 0) return;
+
+    const ref = fn.scope.generateUidIdentifier('ref');
+    for (const read of reads) read.replaceWith(t.cloneNode(ref));
+    const [declaration] = fn.get('body').unshiftContainer('body', t.variableDeclaration('let', [
+        t.variableDeclarator(t.objectPattern([t.objectProperty(t.identifier('ref'), ref)]), t.identifier(props.name)),
+    ]));
+    fn.scope.registerDeclaration(declaration);
+}
+
+/** The `props.ref` reads, or none when `props` is null-checked or `props.ref` is written: rewriting those isn't safe. */
+function propsRefReads(binding: any, t: any): any[] {
+    const reads = [];
+    for (const use of binding.referencePaths) {
+        const parent = use.parentPath;
+        if (
+            parent.isOptionalMemberExpression() ||
+            parent.isUnaryExpression() ||
+            parent.isBinaryExpression() ||
+            parent.isLogicalExpression() ||
+            parent.node.test === use.node
+        ) {
+            return [];
+        }
+        if (!parent.isMemberExpression({ object: use.node, computed: false }) || !t.isIdentifier(parent.node.property, { name: 'ref' })) continue;
+        const context = parent.parentPath;
+        if (context.isAssignmentExpression({ left: parent.node }) || context.isUpdateExpression() || context.isUnaryExpression({ operator: 'delete' })) {
+            return [];
+        }
+        reads.push(parent);
+    }
+    return reads;
 }
 
 /**

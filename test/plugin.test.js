@@ -440,6 +440,57 @@ export function Badge$lambda(props) {
         assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
     });
 
+    test('compiles components importing mangled jsx and passing props.ref to a hook', () => {
+        const { code, events } = compileKotlinMjs(`import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+export function SidebarButton$lambda(props) {
+  'use memo';
+  var tmp0 = props.ref;
+  useFocusTrap(tmp0);
+  var attrs = {};
+  attrs.ref = props.ref;
+  attrs.title = props.label;
+  return jsx('button', attrs, '@rdk/32_4');
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /ref: _ref\s*\} = props;/);
+        assert.doesNotMatch(code, /props\.ref/);
+    });
+
+    test('destructures props.ref apart from outer names, leaving a shadowing inner props alone', () => {
+        const { code, events } = compileKotlinMjs(`import { jsx } from 'react/jsx-runtime';
+var ref = 5;
+function Outer$lambda(props) {
+  'use memo';
+  var renderInner = (props) => props.ref;
+  var attrs = {};
+  attrs.ref = props.ref;
+  attrs.fallback = ref;
+  attrs.render = renderInner;
+  return jsx('div', attrs);
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /attrs\.ref = _ref;/);
+        assert.match(code, /attrs\.fallback = ref;/);
+        assert.match(code, /\b_?props\.ref\b/);
+    });
+
+    test('leaves props.ref alone in non-components, on null-checked props and when written', () => {
+        const { code } = compileKotlinMjs(`function useHelper(el) {
+  'use memo';
+  return el.ref;
+}
+function Guarded$lambda(el) {
+  'use memo';
+  return el == null ? null : el.ref;
+}
+function Mutating$lambda(holder) {
+  'use memo';
+  holder.ref = 2;
+  return holder.ref;
+}`);
+        assert.doesNotMatch(code, /_ref/);
+    });
+
     test('rewrites VOID default arguments with collision-free parameter names', () => {
         // Without "use memo" nothing is compiled in annotation mode, so the output is the Babel pre-pass alone.
         const { code } = compileKotlinMjs(`function useTimeout(x, _x, delay) {
