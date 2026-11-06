@@ -291,6 +291,18 @@ function invoke$lambda_0($isDragging$delegate, _set____db54di) {
     },
 
     {
+        name: 'rewrites BigInt literals into BigInt("...") string calls preserving 64-bit Long precision',
+        input: `function useTimestamp(ms) {
+  'use memo';
+  return ms / 1000n + 0n + 9223372036854775807n;
+}`,
+        expected: `function useTimestamp(ms) {
+  'use memo';
+  return ms / BigInt('1000') + BigInt('0') + BigInt('9223372036854775807');
+}`,
+    },
+
+    {
         name: 'destructures indexed useState and .at() useTransition results',
         input: `import {
   useState as useState,

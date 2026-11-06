@@ -36,6 +36,7 @@ type Body = Array<Directive | Statement>;
  * - lifted `useMemo` / `useCallback` / `useEffect` callbacks, also hoisted as `let tmp = () => ...`, → inline arrows
  * - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
  * - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
+ * - `BigInt` literals (`1000n`) → `BigInt('1000')`
  * - trailing `return Unit_getInstance()` dropped from effects
  * - `"use memo"` moved back to the top of a function body
  */
@@ -66,6 +67,11 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
         Identifier(node) {
             const rename = renames.get(node.name);
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
+        },
+        Literal(node) {
+            if ('bigint' in node && node.bigint !== undefined) {
+                leaf.push({ start: node.start, end: node.end, text: `BigInt('${node.bigint}')` });
+            }
         },
         CallExpression(node) {
             const delegateAccess = delegateAccessEdits(node, scope);
