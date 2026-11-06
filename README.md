@@ -60,7 +60,7 @@ The plugin accepts the following options:
 
 - **Type:** `boolean | ReactCompilerOptions`
 
-Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', include?: Array<string | RegExp> }`).
+Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, include?: Array<string | RegExp> }`).
 
 ### `compilationMode`
 
@@ -68,6 +68,13 @@ Enable/disable or configure the React Compiler pre-transform (`{ compilationMode
 - **Default:** `'annotation'`
 
 React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
+
+### `preserveExistingMemoizationGuarantees`
+
+- **Type:** `boolean`
+- **Default:** `false`
+
+Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler`. Disabled by default because Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results; when `false`, the compiler infers its own memoization dependencies instead of bailing out or preserving deliberately omitted dependency lists.
 
 ### `include`
 
@@ -104,13 +111,22 @@ Output debug information about the transformed files.
    - indexed `useState` / `useTransition` results → array destructuring
    - `_` prefix on synthetic `use*$lambda` / `Component$lambda$` helpers, so they aren't mistaken for hooks or
      components
-   - lifted `useMemo` / `useCallback` / `useEffect` callbacks → inline arrows
+   - lifted `useMemo` / `useCallback` / `useEffect` callbacks (also hoisted as `let tmp = () => ...`) → inline arrows
+   - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
+   - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
+   - `BigInt` literals (`1000n`) → `BigInt('1000')`
    - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks
+   - `"use memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling
 
    Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
-   `jsx()` / `jsxs()` from `react/jsx-runtime` return frozen values. Before the compiler runs, repeated binding names
-   inside each top-level function are renamed apart: the compiler renames a shadowed `tmp` to `tmp_0` without checking
-   that the name is free, which collides with Kotlin's own `tmp_0` temporaries.
+   `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX runtime return frozen values. Before the compiler
+   runs, a Babel pre-pass applies the rewrites that need scope analysis:
+   - Kotlin default arguments (`x = x === VOID ? d : x`) → `let x = _x === VOID ? d : _x`, since the compiler rejects
+     reassigned hook parameters
+   - `props.ref` in `"use memo"` components → a `let { ref: _ref } = props` local, since the compiler rejects the
+     property load as a ref access during render
+   - repeated binding names inside each top-level function are renamed apart: the compiler renames a shadowed `tmp` to
+     `tmp_0` without checking that the name is free, which collides with Kotlin's own `tmp_0` temporaries
 2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
    the official Vite React plugin can apply React Fast Refresh:
    - the exported `get_X()` component getter → `GetX()`, so React Refresh registers it as a component (the export name
