@@ -363,12 +363,35 @@ function destructureStateHooks(statements: Body, scope: ModuleScope): TextEdit[]
         if (!isStateHookCall(head.init)) continue;
         const value = singleDeclarator(statements[i + 1]);
         const setter = singleDeclarator(statements[i + 2]);
-        if (readsIndex(value, head.id.name, 0) && readsIndex(setter, head.id.name, 1)) {
+        // The tuple itself must have no other readers (e.g. Kotlin `val state = useState(); ...; return state`)
+        if (readsIndex(value, head.id.name, 0) && readsIndex(setter, head.id.name, 1) && !readsBinding(statements.slice(i + 3), head.id.name)) {
             edits.push(bindAs(statements[i], head, [value.id.name, setter.id.name]), remove(statements[i + 1]), remove(statements[i + 2]));
             i += 2;
         }
     }
     return edits;
+}
+
+/**
+ * Whether `statements` read the tuple `name` declared just before them. Kotlin reuses temporary names
+ * (`_destruct__k2r9zo`): reads after a redeclaration, at this level or in a nested block, are of the new value.
+ */
+function readsBinding(statements: Body, name: string): boolean {
+    for (const statement of statements) {
+        const redeclared = singleDeclarator(statement);
+        if (redeclared?.id.name === name) return mentions(redeclared.init, name);
+        if (mentions(statement, name)) return true;
+    }
+    return false;
+}
+
+function mentions(node: unknown, name: string): boolean {
+    if (Array.isArray(node)) return node.some((child) => mentions(child, name));
+    if (!node || typeof node !== 'object') return false;
+    const { type } = node as Node;
+    if (type === 'Identifier') return (node as { name: string }).name === name;
+    if (type === 'BlockStatement') return readsBinding((node as { body: Body }).body, name);
+    return Object.entries(node).some(([key, child]) => key !== 'parent' && mentions(child, name));
 }
 
 type IdentifierDeclarator = VariableDeclarator & { id: BindingIdentifier };

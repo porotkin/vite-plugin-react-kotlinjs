@@ -76,6 +76,54 @@ function _App$lambda$lambda() {
     },
 
     {
+        name: 'keeps the useState tuple when it is read beyond its two indexes',
+        input: `import { useState as useState } from 'react';
+function useModeState() {
+  'use memo';
+  var delegate = useState(0);
+  var mode = delegate[0];
+  var setMode = delegate[1];
+  return delegate;
+}`,
+        expected: `import { useState as useState } from 'react';
+function useModeState() {
+  'use memo';
+  let delegate = useState(0);
+  let mode = delegate[0];
+  let setMode = delegate[1];
+  return delegate;
+}`,
+    },
+
+    {
+        name: 'destructures a useState tuple whose temporary name Kotlin reuses in a nested block',
+        input: `import { useState as useState } from 'react';
+function useRange(values) {
+  'use memo';
+  var _destruct__k2r9zo = useState(null);
+  var active = _destruct__k2r9zo[0];
+  var setActive = _destruct__k2r9zo[1];
+  if (active != null) {
+    var _destruct__k2r9zo = values.pair();
+    var first = _destruct__k2r9zo.first;
+  }
+  return active;
+}`,
+        expected: `import { useState as useState } from 'react';
+function useRange(values) {
+  'use memo';
+  let [active, setActive] = useState(null);
+
+
+  if (active != null) {
+    let _destruct__k2r9zo = values.pair();
+    let first = _destruct__k2r9zo.first;
+  }
+  return active;
+}`,
+    },
+
+    {
         name: 'rewrites nested var and destructures useState(x)[0]',
         input: `import { useState as useState } from 'react';
 function useFilteredLabels(items, prefix) {
