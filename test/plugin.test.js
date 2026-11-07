@@ -26,7 +26,7 @@ const normalizeCases = [
         name: 'keeps the hoisted "use memo" when the statement it moves above is rewritten too',
         input: `function Badge$lambda(props){var label = props.label; 'use memo'; return label;}`,
         expected: `function Badge$lambda(props){
-  'use memo';let label = props.label;  return label;}`,
+  'use memo';var label = props.label;  return label;}`,
     },
 
     {
@@ -65,12 +65,12 @@ function App$lambda() {
 
 
   useEffect(() => {
-  let x = 1;
+  var x = 1;
 
 }, []);
 }
 function _App$lambda$lambda() {
-  let x = 1;
+  var x = 1;
 
 }`,
     },
@@ -88,9 +88,9 @@ function useModeState() {
         expected: `import { useState as useState } from 'react';
 function useModeState() {
   'use memo';
-  let delegate = useState(0);
-  let mode = delegate[0];
-  let setMode = delegate[1];
+  var delegate = useState(0);
+  var mode = delegate[0];
+  var setMode = delegate[1];
   return delegate;
 }`,
     },
@@ -116,8 +116,8 @@ function useRange(values) {
 
 
   if (active != null) {
-    let _destruct__k2r9zo = values.pair();
-    let first = _destruct__k2r9zo.first;
+    var _destruct__k2r9zo = values.pair();
+    var first = _destruct__k2r9zo.first;
   }
   return active;
 }`,
@@ -142,11 +142,11 @@ function useFilteredLabels(items, prefix) {
         expected: `import { useState as useState } from 'react';
 function useFilteredLabels(items, prefix) {
   'use memo';
-  let tmp$ret$0 = toString(trim(prefix));
+  var tmp$ret$0 = toString(trim(prefix));
   let [normalizedPrefix] = useState(tmp$ret$0);
-  let tmp;
+  var tmp;
   if (charSequenceLength(normalizedPrefix) > 0) {
-    let destination = ArrayList().new_kotlin_collections_ArrayList_h94ppk_k$();
+    var destination = ArrayList().new_kotlin_collections_ArrayList_h94ppk_k$();
     tmp = copyToArray(destination);
   } else {
     tmp = items;
@@ -181,10 +181,10 @@ function useSearchResults$lambda() {
 import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
 function useSearchResults(items, onSelect) {
   'use memo';
-  let defaultHeader = useMemo(() => {
+  var defaultHeader = useMemo(() => {
   return 'Results';
 }, []);
-  let handleSelectIndex = useCallback((index) => {
+  var handleSelectIndex = useCallback((index) => {
     onSelect(getOrNull(items, index) ?? defaultHeader);
     return Unit_getInstance();
   }, [items, onSelect]);
@@ -269,10 +269,10 @@ function AdminService$_init_$ref() {
 import { constructCallableReference23y65rf941mch as constructCallableReference } from './reflectRuntime.mjs';
 function usePopupSettings(item) {
   'use memo';
-  let settings = useMemo(() => getPopupSettings$ref()(), []);
-  let service = useService('admin', AdminService$_init_$ref());
+  var settings = useMemo(() => getPopupSettings$ref()(), []);
+  var service = useService('admin', AdminService$_init_$ref());
 
-  let cb = useCallback(() => item.id, [item]);
+  var cb = useCallback(() => item.id, [item]);
   return [settings, service, cb];
 }
 function getPopupSettings$ref() {
@@ -317,8 +317,8 @@ function Carousel$lambda(props) {
   'use memo';
   _init_properties_Carousel_kt();
 
-  let isDragging$delegate = useRef(false);
-  let onMove = () => {
+  var isDragging$delegate = useRef(false);
+  var onMove = () => {
     if (!isDragging$delegate.current) {
       (isDragging$delegate.current = true);
     }
@@ -394,7 +394,7 @@ function DestructuredStateDemo$lambda() {
   let [isPending, startTransition] = useTransition();
 
 
-  let attrs = {};
+  var attrs = {};
   attrs.onClick = (it) => {
     startTransition(() => {
       setCount(_DestructuredStateDemo$lambda$lambda$lambda$lambda);
@@ -458,6 +458,64 @@ export function Foo(props) {
   return jsx('div', { onClick: cb, title: tmp, id: tmp_0 });
 }`;
     const assignedFrom = (code, value) => new RegExp(`(\\w+) = ${value.replace('.', '\\.')};`).exec(code)?.[1];
+
+    // Kotlin/JS `var`s are function-scoped: the loop condition reads one declared in the loop body.
+    const doWhileVar = `export function useEngineLabels(nEngines) {
+  'use memo';
+  var labels = [];
+  var inductionVariable = 0;
+  if (inductionVariable <= nEngines)
+    do {
+      var engine = inductionVariable;
+      inductionVariable = inductionVariable + 1 | 0;
+      labels.push('E' + engine);
+    }
+     while (!(engine === nEngines));
+  return labels;
+}`;
+    // A nested redeclaration assigns the same `var`; as two `let`s the outer one would shadow it on return.
+    const nestedRedeclaration = `export function useLabel(props) {
+  'use memo';
+  var tmp = props.a;
+  if (props.flag) {
+    var tmp = props.b;
+  }
+  return tmp;
+}`;
+    const babel = projectRequire('@babel/core');
+    const unboundNames = (code) => {
+        const names = new Set();
+        babel.traverse(babel.parseSync(code, { sourceType: 'module', configFile: false, babelrc: false }), {
+            ReferencedIdentifier(path) {
+                const { name } = path.node;
+                if (!path.scope.hasBinding(name, true) && !(name in globalThis)) names.add(name);
+            },
+        });
+        return names;
+    };
+    const run = (code, name) => new Function(`${code.replace(/^export /gm, '')}\nreturn ${name};`)();
+
+    test('declares a do-while body var read by the loop condition at the top of its function', () => {
+        const {code, events} = compileKotlinMjs(doWhileVar);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /let engine;/);
+        assert.ok(!unboundNames(code).has('engine'));
+    });
+
+    test('keeps a var redeclared in a nested block one variable', () => {
+        const {code, events} = compileKotlinMjs(nestedRedeclaration);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.equal(run(code, 'useLabel')({ a: 'a', b: 'b', flag: true }), 'b');
+        assert.equal(run(code, 'useLabel')({ a: 'a', b: 'b', flag: false }), 'a');
+    });
+
+    test('leaves no identifier unbound that the Kotlin/JS input binds', () => {
+        for (const input of [...normalizeCases.map((c) => c.input), doWhileVar, nestedRedeclaration]) {
+            const before = unboundNames(input);
+            const lost = [...unboundNames(compileKotlinMjs(input).code)].filter((name) => !before.has(name));
+            assert.deepEqual(lost, [], `unbound after compiling:\n${input}`);
+        }
+    });
 
     test('compiles a component whose "use memo" follows Kotlin property initialization', () => {
         const { code, events } = compileKotlinMjs(`import { jsx } from 'react/jsx-runtime';

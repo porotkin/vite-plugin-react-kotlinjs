@@ -30,7 +30,6 @@ type Body = Array<Directive | Statement>;
 
 /**
  * Rewrites Kotlin/JS output into code `babel-plugin-react-compiler` can analyse:
- * - `var` → `let`
  * - `_` prefix on synthetic `use*$` / `Component$lambda$` helpers
  * - indexed `useState` / `useTransition` results → array destructuring
  * - lifted `useMemo` / `useCallback` / `useEffect` callbacks, also hoisted as `let tmp = () => ...`, → inline arrows
@@ -39,7 +38,7 @@ type Body = Array<Directive | Statement>;
  * - `BigInt` literals (`1000n`) → `BigInt('1000')`
  * - trailing `return Unit_getInstance()` dropped from effects
  * - `"use memo"` moved back to the top of a function body
- * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`).
+ * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`), `var` → `let` among them.
  */
 export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
     const { program } = parseSync(filename, code, { lang: 'js' });
@@ -62,9 +61,6 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
         FunctionDeclaration: hoistUseMemo,
         FunctionExpression: hoistUseMemo,
         ArrowFunctionExpression: hoistUseMemo,
-        VariableDeclaration(node) {
-            if (node.kind === 'var') leaf.push({ start: node.start, end: node.start + 3, text: 'let' });
-        },
         Identifier(node) {
             const rename = renames.get(node.name);
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
