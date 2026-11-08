@@ -72,9 +72,9 @@ React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 ### `preserveExistingMemoizationGuarantees`
 
 - **Type:** `boolean`
-- **Default:** `false`
+- **Default:** `true`
 
-Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler`. Disabled by default because Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results; when `false`, the compiler infers its own memoization dependencies instead of bailing out or preserving deliberately omitted dependency lists.
+Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler` (enabled by default there too). When `true`, a `useMemo` / `useCallback` result stays memoized, and a function whose existing memoization the compiler cannot preserve is left uncompiled. When `false`, more functions compile, but the compiler may drop a `useMemo` and recompute its value on every render: code that relies on the value keeping its identity, such as effect dependencies or options passed to TanStack Table, then sees a new value each render and can loop. Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results, which is what most of the uncompiled functions come from.
 
 ### `incompatibleHooks`
 

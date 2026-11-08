@@ -65,7 +65,7 @@ export function compileKotlinMjs(
     filename = 'module.mjs',
     {
         compilationMode = DEFAULT_COMPILATION_MODE,
-        preserveExistingMemoizationGuarantees = false,
+        preserveExistingMemoizationGuarantees,
         incompatibleHooks = {},
     }: ReactCompilerOptions = {},
 ): CompileKotlinMjsResult {

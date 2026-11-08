@@ -4,9 +4,8 @@ export interface ReactCompilerOptions {
     compilationMode?: CompilationMode;
     /**
      * Whether to enforce and preserve manual `useMemo` / `useCallback` memoization guarantees.
-     * Defaults to `false` so Kotlin/JS hooks omitting stable hook dependencies do not bail out;
-     * when `false`, React Compiler infers its own memoization dependencies rather than preserving
-     * deliberately incomplete manual dependency lists.
+     * Left unset, React Compiler's own default applies (`true`): functions whose existing memoization
+     * cannot be preserved are left uncompiled instead of having their `useMemo` values recomputed.
      */
     preserveExistingMemoizationGuarantees?: boolean;
     /** Hooks the compiler skips functions calling, by module name, e.g. `{ 'react-hook-form': ['useForm'] }`. */
@@ -40,9 +39,7 @@ export function resolveOptions(options: Options) {
         reactCompiler: options.reactCompiler !== false,
         compilationMode: overrides.compilationMode ?? options.compilationMode ?? DEFAULT_COMPILATION_MODE,
         preserveExistingMemoizationGuarantees:
-            overrides.preserveExistingMemoizationGuarantees ??
-            options.preserveExistingMemoizationGuarantees ??
-            false,
+            overrides.preserveExistingMemoizationGuarantees ?? options.preserveExistingMemoizationGuarantees,
         incompatibleHooks: overrides.incompatibleHooks ?? options.incompatibleHooks,
         include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
