@@ -532,6 +532,21 @@ export function Foo(props) {
         }
     });
 
+    test('skips functions calling hooks listed in incompatibleHooks, and only those', () => {
+        const input = `import { useReactTable as useReactTable } from '@tanstack/react-table';
+export function useRows(options) {
+  'use memo';
+  var table = useReactTable(options);
+  return table.getRowModel();
+}`;
+        assert.deepEqual(compileKotlinMjs(input).events.map((e) => e.kind), ['CompileSuccess']);
+        const { code, events } = compileKotlinMjs(input, 'module.mjs', {
+            incompatibleHooks: { '@tanstack/react-table': ['useReactTable'] },
+        });
+        assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
+        assert.doesNotMatch(code, /_c\(/);
+    });
+
     test('compiles a component whose "use memo" follows Kotlin property initialization', () => {
         const { code, events } = compileKotlinMjs(`import { jsx } from 'react/jsx-runtime';
 var initialized;

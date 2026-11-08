@@ -60,7 +60,7 @@ The plugin accepts the following options:
 
 - **Type:** `boolean | ReactCompilerOptions`
 
-Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, include?: Array<string | RegExp> }`).
+Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, incompatibleHooks?: Record<string, string[]>, include?: Array<string | RegExp> }`).
 
 ### `compilationMode`
 
@@ -75,6 +75,13 @@ React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 - **Default:** `false`
 
 Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler`. Disabled by default because Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results; when `false`, the compiler infers its own memoization dependencies instead of bailing out or preserving deliberately omitted dependency lists.
+
+### `incompatibleHooks`
+
+- **Type:** `Record<string, string[]>`
+- **Default:** `{}`
+
+Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ '@tanstack/react-virtual': ['useVirtualizer'] }`: a function calling one is left uncompiled. The plugin's `moduleTypeProvider` replaces `babel-plugin-react-compiler`'s built-in one, so its list of incompatible libraries does not apply; list the hooks of the library versions you use here.
 
 ### `include`
 

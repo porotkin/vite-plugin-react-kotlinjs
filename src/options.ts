@@ -9,6 +9,8 @@ export interface ReactCompilerOptions {
      * deliberately incomplete manual dependency lists.
      */
     preserveExistingMemoizationGuarantees?: boolean;
+    /** Hooks the compiler skips functions calling, by module name, e.g. `{ 'react-hook-form': ['useForm'] }`. */
+    incompatibleHooks?: Record<string, string[]>;
     include?: Array<string | RegExp>;
 }
 
@@ -41,6 +43,7 @@ export function resolveOptions(options: Options) {
             overrides.preserveExistingMemoizationGuarantees ??
             options.preserveExistingMemoizationGuarantees ??
             false,
+        incompatibleHooks: overrides.incompatibleHooks ?? options.incompatibleHooks,
         include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
         // A custom `isReactFC` may accept modules without the default markers, so those can't be pre-filtered.
