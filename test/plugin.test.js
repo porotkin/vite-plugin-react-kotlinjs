@@ -23,6 +23,21 @@ const normalizeCases = [
     },
 
     {
+        name: 'moves "use no memo" above Kotlin property initialization',
+        input: `function useRows(table) {
+  _init_properties_Rows_kt__d9zukm();
+  'use no memo';
+  return table.getRowModel().rows;
+}`,
+        expected: `function useRows(table) {
+  'use no memo';
+  _init_properties_Rows_kt__d9zukm();
+
+  return table.getRowModel().rows;
+}`,
+    },
+
+    {
         name: 'keeps the hoisted "use memo" when the statement it moves above is rewritten too',
         input: `function Badge$lambda(props){var label = props.label; 'use memo'; return label;}`,
         expected: `function Badge$lambda(props){

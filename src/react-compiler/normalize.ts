@@ -37,7 +37,7 @@ type Body = Array<Directive | Statement>;
  * - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
  * - `BigInt` literals (`1000n`) → `BigInt('1000')`
  * - trailing `return Unit_getInstance()` dropped from effects
- * - `"use memo"` moved back to the top of a function body
+ * - `"use memo"` / `"use no memo"` moved back to the top of a function body
  * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`), `var` → `let` among them.
  */
 export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
@@ -53,14 +53,14 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
     // `let tmp = () => ...` declarations to inline, by the hook argument referencing them.
     const hoisted = new Map<IdentifierReference, ArrowFunctionExpression>();
 
-    const hoistUseMemo = (fn: AnyFunction) => {
-        if (fn.body?.type === 'BlockStatement') leaf.push(...useMemoHoist(code, fn.body));
+    const hoistMemoDirective = (fn: AnyFunction) => {
+        if (fn.body?.type === 'BlockStatement') leaf.push(...memoDirectiveHoist(code, fn.body));
     };
 
     new Visitor({
-        FunctionDeclaration: hoistUseMemo,
-        FunctionExpression: hoistUseMemo,
-        ArrowFunctionExpression: hoistUseMemo,
+        FunctionDeclaration: hoistMemoDirective,
+        FunctionExpression: hoistMemoDirective,
+        ArrowFunctionExpression: hoistMemoDirective,
         Identifier(node) {
             const rename = renames.get(node.name);
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
@@ -258,20 +258,22 @@ function callableRefWraps(call: CallExpression, scope: ModuleScope): TextEdit[] 
     });
 }
 
+const MEMO_DIRECTIVES = new Set<unknown>(['use memo', 'use no memo']);
+
 /**
  * Kotlin/JS emits `_init_properties_<File>_kt()` and default-argument handling at the start of a function,
- * pushing `"use memo"` below them, where it is a plain expression statement instead of a directive.
+ * pushing `"use memo"` / `"use no memo"` below them, where it is a plain expression statement instead of a directive.
  */
-function useMemoHoist(code: string, body: FunctionBody): TextEdit[] {
+function memoDirectiveHoist(code: string, body: FunctionBody): TextEdit[] {
     const misplaced = body.body.find((statement) =>
         statement.type === 'ExpressionStatement' &&
         !('directive' in statement) &&
         statement.expression.type === 'Literal' &&
-        statement.expression.value === 'use memo');
+        MEMO_DIRECTIVES.has(statement.expression.value));
     if (!misplaced) return [];
     const indent = code.slice(body.start + 1, body.body[0].start) || '\n  ';
     return [
-        { start: body.start + 1, end: body.start + 1, text: `${indent}'use memo';` },
+        { start: body.start + 1, end: body.start + 1, text: indent + code.slice(misplaced.start, misplaced.end) },
         { start: misplaced.start, end: misplaced.end, text: '' },
     ];
 }

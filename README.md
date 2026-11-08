@@ -123,7 +123,7 @@ Output debug information about the transformed files.
      `1000n` → `BigInt('1000')`
    - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks\
      `() => { f(); return Unit_getInstance(); }` → `() => { f(); }`
-   - `"use memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling\
+   - `"use memo"` / `"use no memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling\
      `_init_properties_X_kt(); 'use memo';` → `'use memo'; _init_properties_X_kt();`
 
    Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
