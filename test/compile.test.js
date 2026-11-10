@@ -298,4 +298,25 @@ export function useThing(a) {
 }`);
         assert.deepEqual([...unboundNames(code)], ['register']);
     });
+
+    test('leaves module-level var declarations alone', () => {
+        const { code, events } = compileKotlinMjs(`import { useState } from 'react';
+var properties_initialized_Foo_kt_1;
+var Foo;
+export function get_Foo() {
+  if (!properties_initialized_Foo_kt_1) {
+    properties_initialized_Foo_kt_1 = true;
+    Foo = 1;
+  }
+  return Foo;
+}
+export function useFoo(a) {
+  'use memo';
+  var state = useState(a)[0];
+  return state + get_Foo();
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /^var properties_initialized_Foo_kt_1;$/m);
+        assert.match(code, /^var Foo;$/m);
+    });
 });

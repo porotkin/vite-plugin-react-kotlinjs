@@ -29,20 +29,22 @@ export function babelPrepass({ types: t }: { types: any }) {
  * it. Otherwise (`do { var item = ...; } while (item !== last)`, a redeclaration in a nested block) its declarations
  * become assignments to one `let` at the top of the function, which is exactly `var` scoping. Shapes neither rewrite
  * covers stay `var`, so the compiler bails out on that function instead of compiling different code.
+ *
+ * Module-level `var`s stay as they are: the compiler never lowers them, and another module of an import cycle may
+ * call into this one before it is evaluated, which a `var` survives (`undefined`) and a `let` does not (TDZ error).
  */
 function blockScopeVars(program: any, t: any) {
-    const ownerOf = (path: any) => path.getFunctionParent() ?? program;
     const declaratorsByOwner = new Map<any, Map<string, any[]>>();
     const patternDeclarations = new Set<any>();
     program.traverse({
         VariableDeclaration(declaration: any) {
-            if (declaration.node.kind !== 'var') return;
+            const owner = declaration.getFunctionParent()?.node;
+            if (declaration.node.kind !== 'var' || !owner) return;
             for (const declarator of declaration.get('declarations')) {
                 if (!declarator.get('id').isIdentifier()) {
                     patternDeclarations.add(declaration.node);
                     continue;
                 }
-                const owner = ownerOf(declaration).node;
                 const byName = declaratorsByOwner.get(owner) ?? new Map<string, any[]>();
                 declaratorsByOwner.set(owner, byName);
                 const name = declarator.node.id.name;
@@ -56,9 +58,9 @@ function blockScopeVars(program: any, t: any) {
     const hoists: Array<{ owner: any; name: string; declarators: any[] }> = [];
     for (const byName of declaratorsByOwner.values()) {
         for (const [name, declarators] of byName) {
-            const owner = ownerOf(declarators[0]);
+            const owner = declarators[0].getFunctionParent();
             if (owner.scope.getBinding(name)?.kind !== 'var') continue;
-            if (keepsMeaningAsLet(owner, name, declarators, ownerOf)) {
+            if (keepsMeaningAsLet(owner, name, declarators)) {
                 for (const declarator of declarators) asLet.add(declarator.node);
             } else if (declarators.every((declarator) => isHoistable(declarator.parentPath))) {
                 hoists.push({ owner, name, declarators });
@@ -80,15 +82,14 @@ function blockScopeVars(program: any, t: any) {
             if (init) declarator.parentPath.replaceWith(t.expressionStatement(t.assignmentExpression('=', t.identifier(name), init)));
             else declarator.parentPath.remove();
         }
-        const body = owner.isProgram() ? owner : owner.get('body');
-        body.unshiftContainer('body', t.variableDeclaration('let', [t.variableDeclarator(t.identifier(name))]));
+        owner.get('body').unshiftContainer('body', t.variableDeclaration('let', [t.variableDeclarator(t.identifier(name))]));
     }
 }
 
 /** The node a `let` replacing this `var` declaration would be scoped to, or `null` where `let` is not allowed. */
 function letScopeOf(declaration: any): any {
     const parent = declaration.parentPath;
-    if (parent.isBlockStatement() || parent.isProgram()) return parent.node;
+    if (parent.isBlockStatement()) return parent.node;
     if (parent.isSwitchCase()) return parent.parentPath.node;
     if ((parent.isForStatement() && declaration.key === 'init') || (parent.isForXStatement() && declaration.key === 'left')) {
         return parent.node;
@@ -97,7 +98,7 @@ function letScopeOf(declaration: any): any {
 }
 
 /** Whether every declaration of `name` sits alone in its own block and every use of it is inside one, after it. */
-function keepsMeaningAsLet(owner: any, name: string, declarators: any[], ownerOf: (path: any) => any): boolean {
+function keepsMeaningAsLet(owner: any, name: string, declarators: any[]): boolean {
     const blocks = declarators.map((declarator) => letScopeOf(declarator.parentPath));
     if (blocks.some((block) => block === null)) return false;
     const inside = (path: any, block: any) => path.findParent((parent: any) => parent.node === block) !== null;
@@ -111,7 +112,7 @@ function keepsMeaningAsLet(owner: any, name: string, declarators: any[], ownerOf
     const uses = [...binding.referencePaths, ...binding.constantViolations.filter((path: any) => !declaratorNodes.has(path.node))];
     return uses.every((use: any) =>
         declarators.some((declarator, i) =>
-            inside(use, blocks[i]) && (declarator.node.start <= use.node.start || ownerOf(use).node !== owner.node),
+            inside(use, blocks[i]) && (declarator.node.start <= use.node.start || use.getFunctionParent().node !== owner.node),
         ),
     );
 }
@@ -119,7 +120,7 @@ function keepsMeaningAsLet(owner: any, name: string, declarators: any[], ownerOf
 /** A single-declarator `var` statement in a block, which an assignment can replace. */
 function isHoistable(declaration: any): boolean {
     const parent = declaration.parentPath;
-    return declaration.node.declarations.length === 1 && (parent.isBlockStatement() || parent.isProgram() || parent.isSwitchCase());
+    return declaration.node.declarations.length === 1 && (parent.isBlockStatement() || parent.isSwitchCase());
 }
 
 /**

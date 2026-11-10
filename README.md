@@ -114,8 +114,6 @@ Output debug information about the transformed files.
    (or every React module, unless `compilationMode` is `'annotation'`). It uses **Oxc** (`parseSync` and `Visitor` from
    `rolldown/utils`) to normalize the Kotlin/JS `.mjs` output:
 
-   - `var` → `let` (Kotlin/JS emits `let` / `const` itself starting with Kotlin 2.5.20,
-     see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348))
    - indexed `useState` / `useTransition` results → array destructuring
 
      ```js
@@ -212,6 +210,11 @@ Output debug information about the transformed files.
    Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
    `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX runtime return frozen values. Before the compiler
    runs, a Babel pre-pass applies the rewrites that need scope analysis:
+
+    - `var` → `let` inside functions, only where block scoping keeps the meaning; otherwise one `let` at the top of the
+      function, or the `var` stays and the compiler skips that function. Module-level `var`s are left alone: a module
+      of an import cycle may be called before it is evaluated. (Kotlin/JS emits `let` / `const` itself starting with
+      Kotlin 2.5.20, see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348).)
 
     - Kotlin default arguments → `let` locals, since the compiler rejects reassigned hook parameters
 
