@@ -15,7 +15,8 @@ import type {
     VariableDeclarator,
 } from '@oxc-project/types';
 import {importFromProject} from '../shared/project';
-import {applyEdits, type TextEdit} from './text-edits';
+import type MagicString from 'magic-string';
+import {editSource, type TextEdit} from './text-edits';
 
 const {parseSync, Visitor}: typeof import('rolldown/utils') = await importFromProject('rolldown/utils');
 
@@ -40,7 +41,7 @@ type Body = Array<Directive | Statement>;
  * - `"use memo"` / `"use no memo"` moved back to the top of a function body
  * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`), `var` → `let` among them.
  */
-export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
+export function normalizedSource(code: string, filename: string): MagicString {
     const { program } = parseSync(filename, code, { lang: 'js' });
     const scope = analyzeModule(program.body);
     const renames = syntheticHelperRenames(scope.functions);
@@ -95,10 +96,18 @@ export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): strin
         },
     }).visit(program);
 
-    for (const { reference, fn } of inlined) {
-        structural.push({ start: reference.start, end: reference.end, text: toArrow(code, fn, leaf) });
+    if (inlined.length > 0) {
+        const leafSource = editSource(code, leaf);
+        for (const { reference, fn } of inlined) {
+            structural.push({ start: reference.start, end: reference.end, text: toArrow(leafSource, fn) });
+        }
     }
-    return applyEdits(code, [...structural, ...leaf]);
+    return editSource(code, [...structural, ...leaf]);
+}
+
+/** The code of `normalizedSource`, without its source map. */
+export function normalizeKotlinMjs(code: string, filename = 'module.mjs'): string {
+    return normalizedSource(code, filename).toString();
 }
 
 type ModuleScope = ReturnType<typeof analyzeModule>;
@@ -331,10 +340,10 @@ function dropTrailingUnitReturn(fn: AnyFunction, scope: ModuleScope): TextEdit[]
 }
 
 /** Renders a hoisted function declaration or arrow expression as an arrow, keeping the leaf edits made inside it. */
-function toArrow(code: string, fn: AnyFunction, leaf: TextEdit[]): string {
-    if (fn.type === 'ArrowFunctionExpression') return applyEdits(code, leaf, fn.start, fn.end);
-    const params = fn.params.map((param) => applyEdits(code, leaf, param.start, param.end));
-    return `(${params.join(', ')}) => ${applyEdits(code, leaf, fn.body!.start, fn.body!.end)}`;
+function toArrow(leafSource: MagicString, fn: AnyFunction): string {
+    if (fn.type === 'ArrowFunctionExpression') return leafSource.slice(fn.start, fn.end);
+    const params = fn.params.map((param) => leafSource.slice(param.start, param.end));
+    return `(${params.join(', ')}) => ${leafSource.slice(fn.body!.start, fn.body!.end)}`;
 }
 
 /**

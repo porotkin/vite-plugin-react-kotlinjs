@@ -1,3 +1,5 @@
+import MagicString from 'magic-string';
+
 export interface TextEdit {
     start: number;
     end: number;
@@ -5,21 +7,19 @@ export interface TextEdit {
 }
 
 /**
- * Applies `edits` to `code[start, end)`; edits outside that range are ignored.
- * At an offset, inserts go first, in listed order. Overlapping replacements: the one starting first wins,
- * on a tie the wider one, then the one listed first.
+ * `code` with `edits` applied, as a `MagicString`: `toString()` is the result, `slice()` a rewritten range of it,
+ * and it maps the result back to `code`. At an offset, inserts go first, in listed order. Overlapping replacements:
+ * the one starting first wins, on a tie the wider one, then the one listed first.
  */
-export function applyEdits(code: string, edits: TextEdit[], start = 0, end = code.length): string {
+export function editSource(code: string, edits: TextEdit[]): MagicString {
     const width = (edit: TextEdit) => edit.end - edit.start;
-    const inRange = edits
-        .filter((edit) => edit.start >= start && edit.end <= end)
-        .sort((a, b) => a.start - b.start || Number(width(a) > 0) - Number(width(b) > 0) || width(b) - width(a));
-    let out = '';
-    let cursor = start;
-    for (const edit of inRange) {
+    const source = new MagicString(code);
+    let cursor = 0;
+    for (const edit of [...edits].sort((a, b) => a.start - b.start || Number(width(a) > 0) - Number(width(b) > 0) || width(b) - width(a))) {
         if (edit.start < cursor) continue;
-        out += code.slice(cursor, edit.start) + edit.text;
         cursor = edit.end;
+        if (width(edit) === 0) source.appendLeft(edit.start, edit.text);
+        else source.overwrite(edit.start, edit.end, edit.text);
     }
-    return out + code.slice(cursor, end);
+    return source;
 }
