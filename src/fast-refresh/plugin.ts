@@ -20,7 +20,7 @@ export function fastRefreshPlugin({ include, isReactFC, reactModuleMarkers, getC
             const name = getComponentName(code);
             if (!name) return undefined;
             const getter = new RegExp(`(?<![\\w$.]|as )get_${name.replaceAll('$', '\\$')}(?![\\w$])`, 'g');
-            return code.replace(getter, () => `Get${name}`) + REACT_PLUGIN_ENABLER;
+            return { code: code.replace(getter, () => `Get${name}`) + REACT_PLUGIN_ENABLER, map: null };
         },
         debug,
     });

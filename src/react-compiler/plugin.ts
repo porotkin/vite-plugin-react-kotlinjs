@@ -14,10 +14,11 @@ export function reactCompilerPlugin(options: ResolvedOptions) {
         codeInclude: annotationOnly
             ? [USE_MEMO_DIRECTIVE]
             : reactModuleMarkers && [USE_MEMO_DIRECTIVE, ...reactModuleMarkers],
-        transform: (code, id) =>
-            USE_MEMO_DIRECTIVE.test(code) || (!annotationOnly && isReactFC(code))
-                ? compileKotlinMjs(code, id, options).code
-                : undefined,
+        transform(code, id) {
+            if (!USE_MEMO_DIRECTIVE.test(code) && (annotationOnly || !isReactFC(code))) return undefined;
+            const { code: compiled, map } = compileKotlinMjs(code, id, options);
+            return { code: compiled, map };
+        },
         debug,
     });
 }

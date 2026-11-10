@@ -259,6 +259,8 @@ Output debug information about the transformed files.
       }
       ```
 
+   The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one.
+
 2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
    the official Vite React plugin can apply React Fast Refresh:
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {SourceMap} from 'node:module';
 import {describe, test} from 'node:test';
 import {compileKotlinMjs, projectRequire} from '../dist/index.js';
 import {normalizeCases} from './fixtures/normalize-cases.js';
@@ -318,5 +319,33 @@ export function useFoo(a) {
         assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
         assert.match(code, /^var properties_initialized_Foo_kt_1;$/m);
         assert.match(code, /^var Foo;$/m);
+    });
+
+    test('maps compiled code back to the lines of the Kotlin/JS module', () => {
+        // The directive hoist and the inlined effect callback both move lines, the compiler rewrites the rest.
+        const input = `import { useEffect } from 'react';
+import { Unit_getInstance3abc as Unit_getInstance } from './stdlib.mjs';
+export function useTitle(props) {
+  _init_properties_Title_kt__a1b2c3();
+  'use memo';
+  var title = formatTitle(props.title);
+  useEffect(useTitle$lambda, [title]);
+  return decorateTitle(title);
+}
+function useTitle$lambda() {
+  reportTitleShown();
+  return Unit_getInstance();
+}`;
+        const { code, map } = compileKotlinMjs(input, 'Title.mjs');
+        const sourceMap = new SourceMap(map);
+        const originalLineOf = (token) => {
+            const lines = code.split('\n');
+            const line = lines.findIndex((text) => text.includes(token));
+            return sourceMap.findEntry(line, lines[line].indexOf(token)).originalLine + 1;
+        };
+        const inputLineOf = (token) => input.split('\n').findIndex((text) => text.includes(token)) + 1;
+        for (const token of ['formatTitle', 'decorateTitle']) {
+            assert.equal(originalLineOf(token), inputLineOf(token), token);
+        }
     });
 });

@@ -4,8 +4,11 @@ export interface TransformPluginConfig {
     include: Array<string | RegExp>;
     /** Native hook pre-filter on module content; omit to let every included module through. */
     codeInclude?: Array<string | RegExp>;
-    /** Returns the rewritten code, or `undefined` to leave the module untouched. */
-    transform: (code: string, id: string) => string | undefined;
+    /**
+     * Returns the rewritten code, or `undefined` to leave the module untouched. A rewrite that moves code returns
+     * its source map; `map: null` keeps the module's existing map.
+     */
+    transform: (code: string, id: string) => { code: string; map: object | null } | undefined;
     debug?: boolean;
 }
 
@@ -24,7 +27,7 @@ export function createTransformPlugin({ name, apply, include, codeInclude, trans
                 const transformed = transform(code, id);
                 if (transformed === undefined) return null;
                 if (debug) console.log(`[vite-plugin-react-kotlinjs] ${name} transformed: ${id}`);
-                return { code: transformed, map: null };
+                return transformed;
             },
         },
     };
