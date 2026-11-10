@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "tsdown",
-    "test": "tsdown && node --test"
+    "test": "tsdown && node --test \"test/*.test.js\""
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
