@@ -273,4 +273,17 @@ export function LogsLoader$lambda(props) {
         assert.match(code, /let _useComparisonLog\$ref = useComparisonLog\$ref;/);
         assert.match(code, /_useComparisonLog\$ref\(\)/);
     });
+
+    test('leaves a function opting out with "use no memo" uncompiled when Kotlin displaced both directives', () => {
+        const { code, events } = compileKotlinMjs(`import { useState } from 'react';
+export function useRows(table) {
+  _init_properties_Rows_kt__d9zukm();
+  'use memo';
+  'use no memo';
+  var selected = useState(0)[0];
+  return table.getRowModel().rows.concat(selected);
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSkip']);
+        assert.doesNotMatch(code, /compiler-runtime/);
+    });
 });

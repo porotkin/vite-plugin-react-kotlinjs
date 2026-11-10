@@ -262,20 +262,21 @@ const MEMO_DIRECTIVES = new Set<unknown>(['use memo', 'use no memo']);
 
 /**
  * Kotlin/JS emits `_init_properties_<File>_kt()` and default-argument handling at the start of a function,
- * pushing `"use memo"` / `"use no memo"` below them, where it is a plain expression statement instead of a directive.
+ * pushing `"use memo"` / `"use no memo"` below them, where they are plain expression statements instead of directives.
+ * Both move back, in order: an opt-out follows the `"use memo"` the Kotlin plugin puts before it.
  */
 function memoDirectiveHoist(code: string, body: FunctionBody): TextEdit[] {
-    const misplaced = body.body.find((statement) =>
+    const misplaced = body.body.filter((statement) =>
         statement.type === 'ExpressionStatement' &&
         !('directive' in statement) &&
         statement.expression.type === 'Literal' &&
         MEMO_DIRECTIVES.has(statement.expression.value));
-    if (!misplaced) return [];
+    if (misplaced.length === 0) return [];
     const indent = code.slice(body.start + 1, body.body[0].start) || '\n  ';
-    return [
-        { start: body.start + 1, end: body.start + 1, text: indent + code.slice(misplaced.start, misplaced.end) },
-        { start: misplaced.start, end: misplaced.end, text: '' },
-    ];
+    return misplaced.flatMap((statement) => [
+        { start: body.start + 1, end: body.start + 1, text: indent + code.slice(statement.start, statement.end) },
+        { start: statement.start, end: statement.end, text: '' },
+    ]);
 }
 
 /** `var tmp = () => ...;` directly followed by a statement passing `tmp` as the callback of a React callback hook. */

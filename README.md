@@ -194,15 +194,18 @@ Output debug information about the transformed files.
      }
      ```
 
-   - `"use memo"` / `"use no memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling
+   - `"use memo"` / `"use no memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling,
+     both of them when a function opts out
 
      ```js
      // before
      _init_properties_X_kt();
      'use memo';
+     'use no memo';
 
      // after
      'use memo';
+     'use no memo';
      _init_properties_X_kt();
      ```
 
