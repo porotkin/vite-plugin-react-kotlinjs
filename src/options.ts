@@ -28,7 +28,7 @@ export const KOTLIN_JSX_RUNTIME = 'kotlin-react/react/jsx/runtime/jsx.mjs';
 const REACT_MODULE_MARKERS = ['kotlin-react/react/ChildrenBuilder.mjs', KOTLIN_JSX_RUNTIME, 'react/jsx-runtime'];
 
 const defaultIsReactFC = (code: string) => REACT_MODULE_MARKERS.some((marker) => code.includes(marker));
-const defaultGetComponentName = (code: string) => /export {(?:.|\s)*get_([\w$]+) as get_(?:.|\s)*}/.exec(code)?.[1];
+const defaultGetComponentName = (code: string) => /export {[^}]*get_([\w$]+) as get_[^}]*}/.exec(code)?.[1];
 
 export type ResolvedOptions = ReturnType<typeof resolveOptions>;
 

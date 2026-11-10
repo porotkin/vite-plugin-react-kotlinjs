@@ -58,4 +58,17 @@ export {
     test('skips modules without a component getter', () => {
         assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
     });
+
+    test('finds the component getter in a long export list in linear time', { timeout: 5000 }, () => {
+        const helpers = Array.from({ length: 200 }, (_, i) => `  helper${i} as helper${i}x1y2z3,`).join('\n');
+        const exports = (getter) => `import { jsx } from 'react/jsx-runtime';
+function get_App() {
+  return App;
+}
+export {
+${getter}${helpers}
+};`;
+        assert.match(fastRefresh.transform.handler(exports('  get_App as get_App1a2b3c,\n'), 'App.mjs').code, /function GetApp\(\) \{/);
+        assert.equal(fastRefresh.transform.handler(exports(''), 'Helpers.mjs'), null);
+    });
 });
