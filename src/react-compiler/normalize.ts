@@ -279,7 +279,10 @@ function memoDirectiveHoist(code: string, body: FunctionBody): TextEdit[] {
     ]);
 }
 
-/** `var tmp = () => ...;` directly followed by a statement passing `tmp` as the callback of a React callback hook. */
+/**
+ * `var tmp = () => ...;` directly followed by a statement passing `tmp` as the callback of a React callback hook.
+ * The declaration is dropped, so the hook argument must be the only use of `tmp`.
+ */
 function hoistedCallbacks(statements: Body, scope: ModuleScope) {
     const found: Array<{ declaration: Span; reference: IdentifierReference; arrow: ArrowFunctionExpression }> = [];
     for (let i = 0; i < statements.length - 1; i++) {
@@ -291,7 +294,10 @@ function hoistedCallbacks(statements: Body, scope: ModuleScope) {
             call?.type === 'CallExpression' &&
             scope.isReactHook(call.callee, CALLBACK_HOOKS) &&
             reference?.type === 'Identifier' &&
-            reference.name === declarator.id.name
+            reference.name === declarator.id.name &&
+            occurrences(declarator.init, reference.name) === 0 &&
+            occurrences(statements[i + 1], reference.name) === 1 &&
+            !readsBinding(statements.slice(i + 2), reference.name)
         ) {
             found.push({ declaration: statements[i], reference, arrow: declarator.init });
         }
@@ -391,6 +397,14 @@ function mentions(node: unknown, name: string): boolean {
     if (type === 'Identifier') return (node as { name: string }).name === name;
     if (type === 'BlockStatement') return readsBinding((node as { body: Body }).body, name);
     return Object.entries(node).some(([key, child]) => key !== 'parent' && mentions(child, name));
+}
+
+/** Number of identifiers named `name` in `node`, whatever they refer to. */
+function occurrences(node: unknown, name: string): number {
+    if (Array.isArray(node)) return node.reduce((count, child) => count + occurrences(child, name), 0);
+    if (!node || typeof node !== 'object') return 0;
+    if ((node as Node).type === 'Identifier') return Number((node as { name: string }).name === name);
+    return Object.entries(node).reduce((count, [key, child]) => (key === 'parent' ? count : count + occurrences(child, name)), 0);
 }
 
 type IdentifierDeclarator = VariableDeclarator & { id: BindingIdentifier };

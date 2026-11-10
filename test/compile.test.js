@@ -286,4 +286,16 @@ export function useRows(table) {
         assert.deepEqual(events.map((e) => e.kind), ['CompileSkip']);
         assert.doesNotMatch(code, /compiler-runtime/);
     });
+
+    test('keeps a hoisted callback that is used beyond the hook', () => {
+        const { code } = compileKotlinMjs(`import { useMemo } from 'react';
+export function useThing(a) {
+  'use memo';
+  var cb = () => a + 1;
+  var value = useMemo(cb, [a]);
+  register(cb);
+  return value;
+}`);
+        assert.deepEqual([...unboundNames(code)], ['register']);
+    });
 });
