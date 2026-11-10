@@ -10,9 +10,10 @@ export { projectRequire } from './shared/project';
 
 export default function reactKotlinJs(options: Options = {}) {
     const resolved = resolveOptions(options);
+    // Fast Refresh goes first: `isReactFC` / `getComponentName` match Kotlin/JS output, which the compiler reprints.
     return [
-        ...(resolved.reactCompiler ? [reactCompilerPlugin(resolved)] : []),
         fastRefreshPlugin(resolved),
+        ...(resolved.reactCompiler ? [reactCompilerPlugin(resolved)] : []),
     ];
 }
 

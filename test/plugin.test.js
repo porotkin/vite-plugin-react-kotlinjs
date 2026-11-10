@@ -2,13 +2,38 @@ import assert from 'node:assert/strict';
 import {describe, test} from 'node:test';
 import reactKotlinJs from '../dist/index.js';
 
-describe('fast refresh plugin', () => {
-    const [compiler, fastRefresh] = reactKotlinJs();
+describe('plugins', () => {
+    const [fastRefresh, compiler] = reactKotlinJs();
+    const component = `import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+var App;
+function App$lambda(props) {
+  'use memo';
+  return jsx('div', props, null);
+}
+function get_App() {
+  return App;
+}
+export {
+  get_App as get_App1a2b3c,
+};`;
 
-    test('runs after the compiler, on the dev server only', () => {
-        assert.deepEqual([compiler.name, fastRefresh.name], ['kotlin-react-compiler', 'vite:react-plugin-kotlinjs']);
+    test('run Fast Refresh before the compiler, on the dev server only', () => {
+        assert.deepEqual([fastRefresh.name, compiler.name], ['vite:react-plugin-kotlinjs', 'kotlin-react-compiler']);
         assert.equal(fastRefresh.apply, 'serve');
+        assert.equal(compiler.apply, undefined);
     });
+
+    test('keep the Fast Refresh rename through the compiler', () => {
+        const refreshed = fastRefresh.transform.handler(component, 'App.mjs').code;
+        const { code, map } = compiler.transform.handler(refreshed, 'App.mjs');
+        assert.match(code, /function GetApp\(\) \{[\s\S]*GetApp as get_App1a2b3c[\s\S]*react\/jsx-dev-runtime/);
+        assert.match(code, /react\/compiler-runtime/);
+        assert.ok(map.mappings.length > 0);
+    });
+});
+
+describe('fast refresh plugin', () => {
+    const [fastRefresh] = reactKotlinJs();
 
     test('renames the component getter and switches to the dev JSX runtime', () => {
         const input = `import { jsx } from 'react/jsx-runtime';

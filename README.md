@@ -23,7 +23,7 @@ dependencies {
 
 ## Usage
 
-Add the plugin (it returns both plugins: React Compiler, then Fast Refresh) and the official Vite React plugin to your `vite.config.js`:
+Add the plugin (it returns both plugins: Fast Refresh, then React Compiler) and the official Vite React plugin to your `vite.config.js`:
 ```javascript
 import reactKotlinJs from '@porotkin/vite-plugin-react-kotlinjs'
 import react from '@vitejs/plugin-react'
@@ -261,8 +261,9 @@ Output debug information about the transformed files.
 
    The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one.
 
-2. **Fast Refresh Post-Processing (`serve` only):** The `vite:react-plugin-kotlinjs` plugin rewrites React modules so
-   the official Vite React plugin can apply React Fast Refresh:
+2. **Fast Refresh (`serve` only):** The `vite:react-plugin-kotlinjs` plugin runs first, on the module as Kotlin/JS
+   emitted it (so `isReactFC` / `getComponentName` match that text), and rewrites React modules so the official Vite
+   React plugin can apply React Fast Refresh:
 
     - the exported component getter is renamed so React Refresh registers it as a component (the export name stays
       `get_X`)
