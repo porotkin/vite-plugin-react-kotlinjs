@@ -38,6 +38,23 @@ export {
         );
     });
 
+    test('renames references to the getter inside its module, but not the export alias', () => {
+        const input = `import { jsx } from 'react/jsx-runtime';
+function get_Tree() {
+  return Tree;
+}
+function Tree$lambda(props) {
+  return jsx(get_Tree(), props.child);
+}
+export {
+  get_Tree as get_Tree,
+};`;
+        const { code } = fastRefresh.transform.handler(input, 'Tree.mjs');
+        assert.match(code, /function GetTree\(\) \{/);
+        assert.match(code, /jsx\(GetTree\(\), props\.child\)/);
+        assert.match(code, /GetTree as get_Tree,/);
+    });
+
     test('skips modules without a component getter', () => {
         assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
     });
