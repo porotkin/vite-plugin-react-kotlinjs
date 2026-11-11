@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {describe, test} from 'node:test';
 import reactKotlinJs from '../dist/index.js';
 
@@ -37,6 +41,17 @@ export {
         const [, withLogger] = reactKotlinJs({ reactCompiler: { logger } });
         withLogger.transform.handler(component, 'App.mjs');
         assert.deepEqual(logged, ['App.mjs: CompileSuccess']);
+    });
+
+    test('load in a project without the compiler toolchain', () => {
+        // Nothing can be resolved from this project: neither `rolldown` nor Babel nor the compiler.
+        const project = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlinjs-project-'));
+        fs.writeFileSync(path.join(project, 'package.json'), '{}');
+        const dist = new URL('../dist/index.js', import.meta.url).href;
+        const script = `const { default: reactKotlinJs } = await import(${JSON.stringify(dist)}); reactKotlinJs({ reactCompiler: false }); reactKotlinJs();`;
+        const { status, stderr } = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: project, encoding: 'utf8' });
+        fs.rmSync(project, { recursive: true });
+        assert.equal(status, 0, stderr);
     });
 });
 

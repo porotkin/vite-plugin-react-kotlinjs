@@ -14,11 +14,11 @@ import type {
     Statement,
     VariableDeclarator,
 } from '@oxc-project/types';
-import {importFromProject} from '../shared/project';
+import {projectRequire} from '../shared/project';
 import type MagicString from 'magic-string';
 import {editSource, type TextEdit} from './text-edits';
 
-const {parseSync, Visitor}: typeof import('rolldown/utils') = await importFromProject('rolldown/utils');
+let oxc: typeof import('rolldown/utils') | undefined;
 
 const STATE_HOOKS = new Set(['useState', 'useTransition']);
 const CALLBACK_HOOKS = new Set(['useMemo', 'useCallback', 'useEffect']);
@@ -42,6 +42,8 @@ type Body = Array<Directive | Statement>;
  * Rewrites that need scope analysis run later, in the Babel pre-pass (`babel-prepass.ts`), `var` → `let` among them.
  */
 export function normalizedSource(code: string, filename: string): MagicString {
+    // Lazy, like the Babel toolchain: with the compiler off, none of the Kotlin/JS project's tooling is loaded.
+    const { parseSync, Visitor } = (oxc ??= projectRequire('rolldown/utils') as typeof import('rolldown/utils'));
     const { program } = parseSync(filename, code, { lang: 'js' });
     const scope = analyzeModule(program.body);
     const renames = syntheticHelperRenames(scope.functions);

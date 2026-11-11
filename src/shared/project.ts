@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 // Kotlin/JS installs npm dependencies under `build/js`, not next to `vite.config`,
 // so tooling is resolved from the Kotlin/JS project to use its own versions.
@@ -15,6 +14,3 @@ function createProjectRequire() {
 }
 
 export const projectRequire = createProjectRequire();
-
-/** ESM `import()` of a package resolved from the Kotlin/JS project. */
-export const importFromProject = (specifier: string) => import(pathToFileURL(projectRequire.resolve(specifier)).href);
