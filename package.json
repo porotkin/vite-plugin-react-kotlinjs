@@ -34,5 +34,18 @@
   },
   "dependencies": {
     "magic-string": "^1.4.5"
+  },
+  "peerDependencies": {
+    "@babel/core": "^7.2.0",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@babel/core": {
+      "optional": true
+    },
+    "babel-plugin-react-compiler": {
+      "optional": true
+    }
   }
 }
