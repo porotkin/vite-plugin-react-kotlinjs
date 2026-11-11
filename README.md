@@ -21,6 +21,15 @@ dependencies {
 }
 ```
 
+React Compiler support needs the Kotlin side prepared by the
+[kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin: it lowers `kotlin-react`
+components and hooks into shapes the compiler understands, and makes Kotlin/JS emit lambdas inline
+(`-Xir-generate-inline-anonymous-functions`), which the compiler requires of a `useMemo` / `useCallback` callback.
+
+The project needs ES modules (`useEsModules()`). Fast Refresh treats a module as one component, so it also needs one
+`.mjs` module per Kotlin file: `kotlin.js.ir.output.granularity=per-file` in `gradle.properties`, the layout the plugin
+is tested with.
+
 ## Usage
 
 Add the plugin (it returns both plugins: Fast Refresh, then React Compiler) and the official Vite React plugin to your `vite.config.js`:
