@@ -207,6 +207,23 @@ function useSelf(x) {
         assert.match(code, /prefix = _prefix === VOID \? "E" : _prefix;/);
     });
 
+    test('keeps a state hook result declared again in a nested block one variable', () => {
+        // As `let [count] = useState(0)` next to `var count`, the module would not parse.
+        for (const state of ['var count = useState(0)[0];', 'var tuple = useState(0);\n  var count = tuple[0];\n  var setCount = tuple[1];']) {
+            const { code, events } = compileKotlinMjs(`import { useState } from 'react';
+export function useCount(props) {
+  'use memo';
+  ${state}
+  if (props.reset) {
+    var count = 0;
+  }
+  return count;
+}`);
+            assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess'], state);
+            assert.match(code, /let count;/, state);
+        }
+    });
+
     test('compiles hooks with VOID default parameters, BigInt literals and $slambda refs', () => {
         const { events } = compileKotlinMjs(`import { useCallback, useRef } from 'react';
 import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';

@@ -54,14 +54,21 @@ export function normalizedSource(code: string, filename: string): MagicString {
     // `let tmp = () => ...` declarations to inline, by the hook argument referencing them.
     const hoisted = new Map<IdentifierReference, ArrowFunctionExpression>();
 
-    const hoistMemoDirective = (fn: AnyFunction) => {
+    // The function each visited block belongs to, innermost last; outside of functions, the module.
+    const owners: unknown[] = [program.body];
+    const enterFunction = (fn: AnyFunction) => {
+        owners.push(fn);
         if (fn.body?.type === 'BlockStatement') leaf.push(...memoDirectiveHoist(code, fn.body));
     };
+    const exitFunction = () => void owners.pop();
 
     new Visitor({
-        FunctionDeclaration: hoistMemoDirective,
-        FunctionExpression: hoistMemoDirective,
-        ArrowFunctionExpression: hoistMemoDirective,
+        FunctionDeclaration: enterFunction,
+        'FunctionDeclaration:exit': exitFunction,
+        FunctionExpression: enterFunction,
+        'FunctionExpression:exit': exitFunction,
+        ArrowFunctionExpression: enterFunction,
+        'ArrowFunctionExpression:exit': exitFunction,
         Identifier(node) {
             const rename = renames.get(node.name);
             if (rename) leaf.push({ start: node.start, end: node.end, text: rename });
@@ -88,7 +95,7 @@ export function normalizedSource(code: string, filename: string): MagicString {
             if (inlinable) inlined.push({ reference: callback, fn: inlinable });
         },
         BlockStatement(node) {
-            structural.push(...destructureStateHooks(node.body, scope));
+            structural.push(...destructureStateHooks(node.body, owners.at(-1), scope));
             for (const { declaration, reference, arrow } of hoistedCallbacks(node.body, scope)) {
                 structural.push({ start: declaration.start, end: declaration.end, text: '' });
                 hoisted.set(reference, arrow);
@@ -349,9 +356,13 @@ function toArrow(leafSource: MagicString, fn: AnyFunction): string {
 /**
  * `var t = useState(x); var a = t[0]; var b = t[1];` → `let [a, b] = useState(x);`
  * `var a = useState(x)[0];`                          → `let [a] = useState(x);`
+ *
+ * A `var` belongs to its whole function, here `owner`, and may be declared again; a `let` belongs to its block and
+ * may not. So a name only becomes a `let` when `owner` binds it once and uses it nowhere outside `statements`.
  */
-function destructureStateHooks(statements: Body, scope: ModuleScope): TextEdit[] {
+function destructureStateHooks(statements: Body, owner: unknown, scope: ModuleScope): TextEdit[] {
     const isStateHookCall = (node: Expression | null | undefined) => node?.type === 'CallExpression' && scope.isReactHook(node.callee, STATE_HOOKS);
+    const keepsMeaningAsLet = (name: string) => bindings(owner, name) === 1 && occurrences(owner, name) === occurrences(statements, name);
     const bindAs = (statement: Span, head: IdentifierDeclarator, names: string[]): TextEdit => ({
         start: statement.start,
         end: head.id.end,
@@ -365,7 +376,7 @@ function destructureStateHooks(statements: Body, scope: ModuleScope): TextEdit[]
         if (!head?.init) continue;
 
         const single = indexedAccess(head.init);
-        if (single?.index === 0 && isStateHookCall(single.target)) {
+        if (single?.index === 0 && isStateHookCall(single.target) && keepsMeaningAsLet(head.id.name)) {
             edits.push(bindAs(statements[i], head, [head.id.name]), {
                 start: single.target.end,
                 end: head.init.end,
@@ -378,7 +389,13 @@ function destructureStateHooks(statements: Body, scope: ModuleScope): TextEdit[]
         const value = singleDeclarator(statements[i + 1]);
         const setter = singleDeclarator(statements[i + 2]);
         // The tuple itself must have no other readers (e.g. Kotlin `val state = useState(); ...; return state`)
-        if (readsIndex(value, head.id.name, 0) && readsIndex(setter, head.id.name, 1) && !readsBinding(statements.slice(i + 3), head.id.name)) {
+        if (
+            readsIndex(value, head.id.name, 0) &&
+            readsIndex(setter, head.id.name, 1) &&
+            !readsBinding(statements.slice(i + 3), head.id.name) &&
+            keepsMeaningAsLet(value.id.name) &&
+            keepsMeaningAsLet(setter.id.name)
+        ) {
             edits.push(bindAs(statements[i], head, [value.id.name, setter.id.name]), remove(statements[i + 1]), remove(statements[i + 2]));
             i += 2;
         }
@@ -414,6 +431,21 @@ function occurrences(node: unknown, name: string): number {
     if (!node || typeof node !== 'object') return 0;
     if ((node as Node).type === 'Identifier') return Number((node as { name: string }).name === name);
     return Object.entries(node).reduce((count, [key, child]) => (key === 'parent' ? count : count + occurrences(child, name)), 0);
+}
+
+/** Number of parameters and `var` declarations binding `name` in `owner`, a function or a module body, nested functions aside. */
+function bindings(owner: unknown, name: string): number {
+    const declared = (node: unknown): number => {
+        if (Array.isArray(node)) return node.reduce((count, child) => count + declared(child), 0);
+        if (!node || typeof node !== 'object') return 0;
+        const { type } = node as Node;
+        if (type === 'FunctionDeclaration' || type === 'FunctionExpression' || type === 'ArrowFunctionExpression') return 0;
+        if (type === 'VariableDeclarator') return occurrences((node as VariableDeclarator).id, name);
+        return Object.entries(node).reduce((count, [key, child]) => (key === 'parent' ? count : count + declared(child)), 0);
+    };
+    if (Array.isArray(owner)) return declared(owner);
+    const { params, body } = owner as AnyFunction;
+    return occurrences(params, name) + declared(body);
 }
 
 type IdentifierDeclarator = VariableDeclarator & { id: BindingIdentifier };
