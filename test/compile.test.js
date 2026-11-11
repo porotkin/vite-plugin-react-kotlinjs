@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import {SourceMap} from 'node:module';
+import fs from 'node:fs';
+import {createRequire, SourceMap} from 'node:module';
 import {describe, test} from 'node:test';
-import {compileKotlinMjs, projectRequire} from '../dist/index.js';
+import {compileKotlinMjs} from '../dist/index.js';
 import {normalizeCases} from './fixtures/normalize-cases.js';
 
 describe('compileKotlinMjs', () => {
@@ -45,7 +46,7 @@ export function Foo(props) {
   }
   return tmp;
 }`;
-    const babel = projectRequire('@babel/core');
+    const babel = createRequire(import.meta.url)('@babel/core');
     const unboundNames = (code) => {
         const names = new Set();
         babel.traverse(babel.parseSync(code, { sourceType: 'module', configFile: false, babelrc: false }), {
@@ -120,7 +121,7 @@ export function Badge$lambda(props) {
     test('keeps shadowed Kotlin temporaries apart when the compiler bails out', () => {
         const {code, events} = compileKotlinMjs(shadowedTemporaries('ref.current = 1;'));
         assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
-        projectRequire('@babel/core').parseSync(code, {sourceType: 'module', configFile: false, babelrc: false});
+        babel.parseSync(code, {sourceType: 'module', configFile: false, babelrc: false});
         assert.match(code, new RegExp(`title: ${assignedFrom(code, 'props.b')},`));
     });
 
