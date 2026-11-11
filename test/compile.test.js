@@ -81,6 +81,17 @@ export function Foo(props) {
         }
     });
 
+    for (const variant of ['development', 'production']) {
+        test(`compiles the ${variant} output of a project using the Kotlin plugin and kotlin-react`, () => {
+            const input = fs.readFileSync(new URL(`./fixtures/kotlin-js/Sample.${variant}.mjs`, import.meta.url), 'utf8');
+            const { code, events } = compileKotlinMjs(input, 'Sample.mjs');
+            // `useNow` opts out with "use no memo"; a `CompileError` here means the two plugins have drifted apart.
+            assert.deepEqual(events.map((e) => e.fnName ?? e.kind), ['useVisibleItems', 'CompileSkip', 'Heading', 'TodoList$lambda']);
+            const before = unboundNames(input);
+            assert.deepEqual([...unboundNames(code)].filter((name) => !before.has(name)), []);
+        });
+    }
+
     test('skips functions calling hooks listed in incompatibleHooks, and only those', () => {
         const input = `import { useReactTable as useReactTable } from '@tanstack/react-table';
 export function useRows(options) {
