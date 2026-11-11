@@ -60,7 +60,7 @@ The plugin accepts the following options:
 
 - **Type:** `boolean | ReactCompilerOptions`
 
-Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, incompatibleHooks?: Record<string, string[]>, include?: Array<string | RegExp> }`).
+Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, incompatibleHooks?: Record<string, string[]>, logger?: { logEvent(filename, event) }, include?: Array<string | RegExp> }`).
 
 ### `compilationMode`
 
@@ -82,6 +82,30 @@ Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExis
 - **Default:** `{}`
 
 Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ '@tanstack/react-virtual': ['useVirtualizer'] }`: a function calling one is left uncompiled. The plugin's `moduleTypeProvider` replaces `babel-plugin-react-compiler`'s built-in one, so its list of incompatible libraries does not apply; list the hooks of the library versions you use here.
+
+### `logger`
+
+- **Type:** `{ logEvent: (filename: string, event: ReactCompilerEvent) => void }`
+
+Receives the events `babel-plugin-react-compiler` logs for a module (the shape of its own `logger` option), once the
+module is compiled: `CompileSuccess` for a compiled function, `CompileSkip` for one opting out with `"use no memo"`,
+`CompileError` for one the compiler left as Kotlin/JS emitted it. Such a function is not memoized at all, and nothing
+else reports it, so code that relies on the compiler for stable identities should watch for it. Throwing from
+`logEvent` fails the build:
+
+```javascript
+reactKotlinJs({
+    reactCompiler: {
+        logger: {
+            logEvent(filename, event) {
+                if (event.kind === 'CompileError') {
+                    throw new Error(`${filename}:${event.fnLoc?.start.line}: ${event.detail.reason}`)
+                }
+            },
+        },
+    },
+})
+```
 
 ### `include`
 

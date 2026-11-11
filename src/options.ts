@@ -1,5 +1,13 @@
 export type CompilationMode = 'annotation' | 'infer' | 'syntax' | 'all';
 
+/** An event `babel-plugin-react-compiler` logs for a function: `CompileSuccess`, `CompileError`, `CompileSkip`, … */
+export interface ReactCompilerEvent {
+    kind: string;
+    fnName?: string | null;
+    memoBlocks?: number;
+    [key: string]: unknown;
+}
+
 export interface ReactCompilerOptions {
     compilationMode?: CompilationMode;
     /**
@@ -10,6 +18,11 @@ export interface ReactCompilerOptions {
     preserveExistingMemoizationGuarantees?: boolean;
     /** Hooks the compiler skips functions calling, by module name, e.g. `{ 'react-hook-form': ['useForm'] }`. */
     incompatibleHooks?: Record<string, string[]>;
+    /**
+     * Receives the events the compiler logged for a module, once the module is compiled. A function behind a
+     * `CompileError` is left as Kotlin/JS emitted it, without any memoization; throwing here fails the build.
+     */
+    logger?: { logEvent: (filename: string, event: ReactCompilerEvent) => void };
     include?: Array<string | RegExp>;
 }
 
@@ -41,6 +54,7 @@ export function resolveOptions(options: Options) {
         preserveExistingMemoizationGuarantees:
             overrides.preserveExistingMemoizationGuarantees ?? options.preserveExistingMemoizationGuarantees,
         incompatibleHooks: overrides.incompatibleHooks ?? options.incompatibleHooks,
+        logger: overrides.logger ?? options.logger,
         include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
         // A custom `isReactFC` may accept modules without the default markers, so those can't be pre-filtered.

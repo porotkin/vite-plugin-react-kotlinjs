@@ -313,6 +313,36 @@ export function useRows(table) {
         assert.doesNotMatch(code, /compiler-runtime/);
     });
 
+    test('reports the compiler events of a module to the logger, which may fail the build', () => {
+        const input = `import { useCallback } from 'react';
+export function useAction(value) {
+  'use memo';
+  var service = useStableService();
+  return useCallback(() => service.run(value), [value]);
+}
+export function useRows(table) {
+  'use memo';
+  'use no memo';
+  return table.rows;
+}
+export function useList(a) {
+  'use memo';
+  return [a];
+}`;
+        const logged = [];
+        compileKotlinMjs(input, 'Hooks.mjs', { logger: { logEvent: (filename, event) => logged.push(`${filename}: ${event.kind}`) } });
+        assert.deepEqual(logged, ['Hooks.mjs: CompileError', 'Hooks.mjs: CompileSkip', 'Hooks.mjs: CompileSuccess']);
+        const failOnBailOut = {
+            logEvent(filename, event) {
+                if (event.kind === 'CompileError') throw new Error(`${filename}: ${event.detail.reason}`);
+            },
+        };
+        assert.throws(
+            () => compileKotlinMjs(input, 'Hooks.mjs', { logger: failOnBailOut }),
+            /Hooks\.mjs: Existing memoization could not be preserved/,
+        );
+    });
+
     test('keeps a hoisted callback that is used beyond the hook', () => {
         const { code } = compileKotlinMjs(`import { useMemo } from 'react';
 export function useThing(a) {

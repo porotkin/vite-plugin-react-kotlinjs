@@ -1,14 +1,7 @@
-import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerOptions} from '../options';
+import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerEvent, type ReactCompilerOptions} from '../options';
 import {projectRequire} from '../shared/project';
 import {babelPrepass} from './babel-prepass';
 import {normalizedSource} from './normalize';
-
-export interface ReactCompilerEvent {
-    kind: string;
-    fnName?: string | null;
-    memoBlocks?: number;
-    [key: string]: unknown;
-}
 
 export interface CompileKotlinMjsResult {
     code: string;
@@ -68,6 +61,7 @@ export function compileKotlinMjs(
         compilationMode = DEFAULT_COMPILATION_MODE,
         preserveExistingMemoizationGuarantees,
         incompatibleHooks = {},
+        logger,
     }: ReactCompilerOptions = {},
 ): CompileKotlinMjsResult {
     const { babel, reactCompiler } = loadToolchain();
@@ -102,5 +96,7 @@ export function compileKotlinMjs(
             ],
         ],
     });
+    // Passed on after Babel is done: a logger that throws then fails the build, not a pass of the compiler.
+    for (const event of events) logger?.logEvent(filename, event);
     return { code: result?.code ?? code, map: result?.map ?? null, events };
 }

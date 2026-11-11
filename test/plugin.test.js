@@ -30,6 +30,14 @@ export {
         assert.match(code, /react\/compiler-runtime/);
         assert.ok(map.mappings.length > 0);
     });
+
+    test('pass the compiler events of a module to the logger', () => {
+        const logged = [];
+        const logger = { logEvent: (filename, event) => logged.push(`${filename}: ${event.kind}`) };
+        const [, withLogger] = reactKotlinJs({ reactCompiler: { logger } });
+        withLogger.transform.handler(component, 'App.mjs');
+        assert.deepEqual(logged, ['App.mjs: CompileSuccess']);
+    });
 });
 
 describe('fast refresh plugin', () => {
