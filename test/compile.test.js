@@ -199,6 +199,14 @@ function useSelf(x) {
 }`);
     });
 
+    test('rewrites VOID default arguments below the let that replaces a function-scoped var', () => {
+        // The do-while `var engine` becomes a `let` at the top of the function, above the default argument.
+        const { code, events } = compileKotlinMjs(doWhileVar.replace(`(nEngines) {`, `(nEngines, prefix) {
+  prefix = prefix === VOID ? 'E' : prefix;`).replace(`'E' + engine`, `prefix + engine`));
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /prefix = _prefix === VOID \? "E" : _prefix;/);
+    });
+
     test('compiles hooks with VOID default parameters, BigInt literals and $slambda refs', () => {
         const { events } = compileKotlinMjs(`import { useCallback, useRef } from 'react';
 import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';

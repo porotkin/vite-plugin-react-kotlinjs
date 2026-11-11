@@ -162,7 +162,7 @@ function rewriteDefaultParams(fn: any, t: any) {
     if (!t.isBlockStatement(fn.node.body)) return;
     let rewritten = false;
     for (const statement of fn.get('body.body')) {
-        if (isInitPropertiesCall(statement.node, t)) continue;
+        if (isInitPropertiesCall(statement.node, t) || isBareDeclaration(statement.node, t)) continue;
         const guard = voidGuard(statement.node, t);
         const index = guard ? fn.node.params.findIndex((param: any) => t.isIdentifier(param, { name: guard.name })) : -1;
         if (!guard || index < 0) break;
@@ -182,6 +182,11 @@ function isInitPropertiesCall(statement: any, t: any): boolean {
         t.isCallExpression(statement.expression) &&
         t.isIdentifier(statement.expression.callee) &&
         statement.expression.callee.name.startsWith('_init_properties_');
+}
+
+/** `let x;`, which `blockScopeVars` puts at the top of a function, above its default-argument handling. */
+function isBareDeclaration(statement: any, t: any): boolean {
+    return t.isVariableDeclaration(statement) && statement.declarations.every((declarator: any) => !declarator.init);
 }
 
 /** `x = x === VOID ? d : x;` or `if (x === VOID) { x = d; }` → `{ name: 'x', value: d }`. */
