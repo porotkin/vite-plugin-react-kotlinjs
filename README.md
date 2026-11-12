@@ -71,6 +71,10 @@ The plugin accepts the following options:
 
 Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, incompatibleHooks?: Record<string, string[]>, logger?: { logEvent(filename, event) }, include?: Array<string | RegExp> }`).
 
+The compiler runs only in the Vite build. Kotlin/JS browser tests (`jsBrowserTest`: Karma with webpack) run the same
+code without it, so a hook that promises a stable identity, an event callback for example, keeps its own `useMemo` or
+`useCallback`.
+
 ### `compilationMode`
 
 - **Type:** `'annotation' | 'infer' | 'syntax' | 'all'`
