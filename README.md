@@ -57,7 +57,6 @@ You can also use the standalone React Compiler pre-plugin or helper functions di
 import {
     kotlinReactCompilerVitePlugin,
     compileKotlinMjs,
-    normalizeKotlinMjs,
     moduleTypeProvider,
 } from '@porotkin/vite-plugin-react-kotlinjs'
 ```
@@ -149,43 +148,12 @@ Output debug information about the transformed files.
 ## How it works
 
 1. **React Compiler Pre-Transform:** The `kotlin-react-compiler` plugin compiles modules that opt in with `"use memo"`
-   (or every React module, unless `compilationMode` is `'annotation'`). It uses **Oxc** (`parseSync` and `Visitor` from
-   `rolldown/utils`) to normalize the Kotlin/JS `.mjs` output:
+   (or every React module, unless `compilationMode` is `'annotation'`) in one Babel pass: a pre-pass rewrites what
+   Kotlin/JS code generation emits into what the compiler accepts, then `babel-plugin-react-compiler` runs with a custom
+   `environment.moduleTypeProvider` that tells it `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX
+   runtime return frozen values. The pre-pass:
 
-   - indexed `useState` / `useTransition` results → array destructuring
-
-     ```js
-     // before
-     var t = useState(0);
-     var a = t[0];
-     var b = t[1];
-
-     // after
-     let [a, b] = useState(0);
-     ```
-
-   - `_` prefix on synthetic `use*$lambda` / `Component$lambda$` helpers, so they aren't mistaken for hooks or
-     components
-
-     ```js
-     // before
-     useFoo$lambda
-
-     // after
-     _useFoo$lambda
-     ```
-
-   - `BigInt` literals → `BigInt` string calls
-
-     ```js
-     // before
-     1000n;
-
-     // after
-     BigInt('1000');
-     ```
-
-   - `"use memo"` / `"use no memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling,
+   - moves `"use memo"` / `"use no memo"` back above Kotlin's `_init_properties_*()` call and default-argument handling,
      both of them when a function opts out
 
      ```js
@@ -200,9 +168,22 @@ Output debug information about the transformed files.
      _init_properties_X_kt();
      ```
 
-   Then it runs `babel-plugin-react-compiler` with a custom `environment.moduleTypeProvider` that tells the compiler
-   `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX runtime return frozen values. Before the compiler
-   runs, a Babel pre-pass applies the rewrites that need scope analysis:
+   - prefixes synthetic `use*$lambda` / `Component$lambda$` helpers with `_`, so they aren't mistaken for hooks or
+     components
+
+   - rewrites `BigInt` literals (Kotlin `Long`) to `BigInt('1000')`, which the compiler can lower
+
+   - destructures indexed `useState` / `useTransition` results, so the compiler knows the setter is stable
+
+     ```js
+     // before
+     var t = useState(0);
+     var a = t[0];
+     var b = t[1];
+
+     // after
+     let [a, b] = useState(0);
+     ```
 
     - `var` → `let` inside functions, only where block scoping keeps the meaning; otherwise one `let` at the top of the
       function, or the `var` stays and the compiler skips that function. Module-level `var`s are left alone: a module

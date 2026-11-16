@@ -1,7 +1,6 @@
 import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerEvent, type ReactCompilerOptions} from '../options';
 import {projectRequire} from '../shared/project';
 import {babelPrepass} from './babel-prepass';
-import {normalizedSource} from './normalize';
 
 export interface CompileKotlinMjsResult {
     code: string;
@@ -104,15 +103,13 @@ export function compileKotlinMjs(
 ): CompileKotlinMjsResult {
     const { babel, reactCompiler } = loadToolchain();
     const events: ReactCompilerEvent[] = [];
-    const normalized = normalizedSource(code, filename);
-    const result = babel.transformSync(normalized.toString(), {
+    const result = babel.transformSync(code, {
         filename,
         sourceType: 'module',
         configFile: false,
         babelrc: false,
         comments: false,
         sourceMaps: true,
-        inputSourceMap: normalized.generateMap({ source: filename, hires: 'boundary' }),
         plugins: [
             babelPrepass,
             [

@@ -44,7 +44,7 @@ export {
     });
 
     test('load in a project without the compiler toolchain', () => {
-        // Nothing can be resolved from this project: neither `rolldown` nor Babel nor the compiler.
+        // Nothing can be resolved from this project: neither Babel nor the compiler.
         const project = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlinjs-project-'));
         fs.writeFileSync(path.join(project, 'package.json'), '{}');
         const dist = new URL('../dist/index.js', import.meta.url).href;

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import {createRequire, SourceMap} from 'node:module';
 import {describe, test} from 'node:test';
 import {compileKotlinMjs} from '../dist/index.js';
-import {normalizeCases} from './fixtures/normalize-cases.js';
+import {bigIntLiterals, stateHookCases} from './fixtures/prepass-cases.js';
 
 describe('compileKotlinMjs', () => {
     // Kotlin/JS names temporaries `tmp`, `tmp_0`, … per function, so an inner `tmp` shadows an outer one next to `tmp_0`.
@@ -74,7 +74,7 @@ export function Foo(props) {
     });
 
     test('leaves no identifier unbound that the Kotlin/JS input binds', () => {
-        for (const input of [...normalizeCases.map((c) => c.input), doWhileVar, nestedRedeclaration]) {
+        for (const input of [...stateHookCases.map((c) => c.input), bigIntLiterals, doWhileVar, nestedRedeclaration]) {
             const before = unboundNames(input);
             const lost = [...unboundNames(compileKotlinMjs(input).code)].filter((name) => !before.has(name));
             assert.deepEqual(lost, [], `unbound after compiling:\n${input}`);
@@ -253,16 +253,16 @@ export function useCount(props) {
         }
     });
 
-    test('compiles hooks with VOID default parameters and BigInt literals', () => {
-        const { events } = compileKotlinMjs(`import { useCallback } from 'react';
-export function useAction(value, enabled) {
-  enabled = enabled === VOID ? true : enabled;
-  'use memo';
-  var service = useStableService();
-  return useCallback(() => service.run(value, enabled, 1000n), [service, value, enabled]);
-}`);
+    test('compiles hooks with VOID default parameters and BigInt literals, keeping 64-bit precision', () => {
+        const { code, events } = compileKotlinMjs(bigIntLiterals);
         assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.match(code, /BigInt\("1000"\)/);
+        assert.match(code, /BigInt\("9223372036854775807"\)/);
     });
+
+    for (const { name, input, expected } of stateHookCases) {
+        test(name, () => assert.match(compileKotlinMjs(input).code, expected));
+    }
 
     test('bails out where existing memoization cannot be preserved, unless preserveExistingMemoizationGuarantees is false', () => {
         const input = `import { useCallback } from 'react';

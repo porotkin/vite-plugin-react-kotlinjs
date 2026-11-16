@@ -1,26 +1,179 @@
 // Babel is resolved from the Kotlin/JS project at runtime and ships no types here, so its paths and nodes are `any`.
 const COMPONENT_NAME = /^[A-Z]/;
 const SYNTHETIC_REF_IMPORT = /\$ref(?:[a-z0-9]{8,16})?$/;
+// Kotlin names lambdas `useFoo$...` / `Component$lambda$...`; the compiler would mistake them for hooks/components.
+const SYNTHETIC_HELPER = /^(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$/;
+const MEMO_DIRECTIVES = new Set(['use memo', 'use no memo']);
+const STATE_HOOKS = new Set(['useState', 'useTransition']);
 
 /**
- * Babel pre-pass for the Kotlin/JS rewrites that need scope analysis; `normalize.ts` does the textual ones.
- * It runs in `pre`, so `babel-plugin-react-compiler` sees its result in the same Babel pass.
+ * Rewrites the JavaScript Kotlin/JS emits into code `babel-plugin-react-compiler` accepts. Kotlin semantics
+ * (hook callbacks, callable references, delegates, effect returns) are lowered by kotlin-react-compiler in IR;
+ * what is left here are JavaScript codegen artifacts. It runs in `pre`, so the compiler sees its result in the same pass.
  */
 export function babelPrepass({ types: t }: { types: any }) {
     return {
         pre(file: { path: any }) {
-            blockScopeVars(file.path, t);
-            file.path.scope.crawl();
-            aliasSyntheticImports(file.path, t);
-            file.path.traverse({
+            const program = file.path;
+            hoistMemoDirectives(program, t);
+            renameSyntheticHelpers(program);
+            program.traverse({
+                // The compiler has no lowering for BigInt literals (Kotlin `Long`); the string keeps 64-bit precision.
+                BigIntLiteral: (path: any) => void path.replaceWith(t.callExpression(t.identifier('BigInt'), [t.stringLiteral(path.node.value)])),
+            });
+            destructureStateHooks(program, t);
+            program.scope.crawl();
+            blockScopeVars(program, t);
+            program.scope.crawl();
+            aliasSyntheticImports(program, t);
+            program.traverse({
                 Function(fn: any) {
                     rewriteDefaultParams(fn, t);
                     destructurePropsRef(fn, t);
                 },
             });
-            uniqueBindingNames(file.path);
+            uniqueBindingNames(program);
         },
     };
+}
+
+/**
+ * Kotlin/JS emits `_init_properties_<File>_kt()` and default-argument handling at the start of a function,
+ * pushing `"use memo"` / `"use no memo"` below them, where they are plain expression statements instead of directives.
+ * Both move back, in order: an opt-out follows the `"use memo"` the Kotlin plugin puts before it.
+ */
+function hoistMemoDirectives(program: any, t: any) {
+    program.traverse({
+        Function(fn: any) {
+            if (!t.isBlockStatement(fn.node.body)) return;
+            for (const statement of fn.get('body.body')) {
+                const { expression } = statement.node;
+                if (!statement.isExpressionStatement() || !t.isStringLiteral(expression) || !MEMO_DIRECTIVES.has(expression.value)) continue;
+                fn.node.body.directives.push(t.directive(t.directiveLiteral(expression.value)));
+                statement.remove();
+            }
+        },
+    });
+}
+
+/** `useFoo$lambda` → `_useFoo$lambda`, for top-level functions only: imported names are `aliasSyntheticImports`'. */
+function renameSyntheticHelpers(program: any) {
+    for (const [name, binding] of Object.entries<any>(program.scope.bindings)) {
+        if (binding.kind === 'hoisted' && SYNTHETIC_HELPER.test(name) && !program.scope.hasBinding(`_${name}`)) {
+            program.scope.rename(name, `_${name}`);
+        }
+    }
+}
+
+/**
+ * `var t = useState(x); var a = t[0]; var b = t[1];` → `let [a, b] = useState(x);`
+ * `var a = useState(x)[0];`                          → `let [a] = useState(x);`
+ * Indexed, the setter is not known to be stable, and the compiler cannot preserve a `useCallback` depending on it.
+ * Each name must be declared once and used only inside the block, where a `let` means what the `var` did.
+ */
+function destructureStateHooks(program: any, t: any) {
+    const isStateHookCall = (node: any) => t.isCallExpression(node) && importedFromReact(program, node.callee, STATE_HOOKS, t);
+    program.traverse({
+        BlockStatement(block: any) {
+            const owner = block.getFunctionParent();
+            if (!owner) return;
+            const keepsMeaningAsLet = (name: string) => {
+                const binding = owner.scope.getBinding(name);
+                return binding?.kind === 'var' &&
+                    binding.scope === owner.scope &&
+                    binding.constantViolations.length === 0 &&
+                    binding.referencePaths.every((use: any) => use.isDescendant(block));
+            };
+            const statements = block.get('body');
+            for (let i = 0; i < statements.length; i++) {
+                const head = singleDeclarator(statements[i].node, t);
+                if (!head?.init) continue;
+
+                const single = indexedAccess(head.init, t);
+                if (single?.index === 0 && isStateHookCall(single.target) && keepsMeaningAsLet(head.id.name)) {
+                    head.init = single.target;
+                    head.id = t.arrayPattern([head.id]);
+                    statements[i].node.kind = 'let';
+                    continue;
+                }
+
+                if (!isStateHookCall(head.init)) continue;
+                const value = singleDeclarator(statements[i + 1]?.node, t);
+                const setter = singleDeclarator(statements[i + 2]?.node, t);
+                if (
+                    readsIndex(value, head.id.name, 0, t) &&
+                    readsIndex(setter, head.id.name, 1, t) &&
+                    !readsBinding(statements.slice(i + 3).map((path: any) => path.node), head.id.name, t) &&
+                    keepsMeaningAsLet(value.id.name) &&
+                    keepsMeaningAsLet(setter.id.name)
+                ) {
+                    head.id = t.arrayPattern([value.id, setter.id]);
+                    statements[i].node.kind = 'let';
+                    statements[i + 1].remove();
+                    statements[i + 2].remove();
+                    i += 2;
+                }
+            }
+        },
+    });
+}
+
+function importedFromReact(program: any, callee: any, names: Set<string>, t: any): boolean {
+    const binding = t.isIdentifier(callee) ? program.scope.getBinding(callee.name) : undefined;
+    const specifier = binding?.kind === 'module' ? binding.path : undefined;
+    if (!specifier?.isImportSpecifier() || specifier.parent.source.value !== 'react') return false;
+    const { imported } = specifier.node;
+    return names.has(t.isIdentifier(imported) ? imported.name : imported.value);
+}
+
+/** The declarator of `var <identifier> = ...` with exactly one binding. */
+function singleDeclarator(statement: any, t: any) {
+    return t.isVariableDeclaration(statement) && statement.declarations.length === 1 && t.isIdentifier(statement.declarations[0].id)
+        ? statement.declarations[0]
+        : undefined;
+}
+
+/** Whether `declarator` is `... = <name>[index]` or `... = <name>.at(index)`. */
+function readsIndex(declarator: any, name: string, index: number, t: any): boolean {
+    const access = declarator?.init ? indexedAccess(declarator.init, t) : undefined;
+    return access?.index === index && t.isIdentifier(access.target, { name });
+}
+
+/** Matches `target[n]` and `target.at(n)` with a numeric literal `n`. */
+function indexedAccess(node: any, t: any): { target: any; index: number } | undefined {
+    if (t.isMemberExpression(node, { computed: true }) && t.isNumericLiteral(node.property)) {
+        return { target: node.object, index: node.property.value };
+    }
+    if (
+        t.isCallExpression(node) &&
+        t.isMemberExpression(node.callee, { computed: false }) &&
+        t.isIdentifier(node.callee.property, { name: 'at' }) &&
+        node.arguments.length === 1 &&
+        t.isNumericLiteral(node.arguments[0])
+    ) {
+        return { target: node.callee.object, index: node.arguments[0].value };
+    }
+    return undefined;
+}
+
+/**
+ * Whether `statements` read the tuple `name` declared just before them. Kotlin reuses temporary names
+ * (`_destruct__k2r9zo`): reads after a redeclaration, at this level or in a nested block, are of the new value.
+ */
+function readsBinding(statements: any[], name: string, t: any): boolean {
+    for (const statement of statements) {
+        const redeclared = singleDeclarator(statement, t);
+        if (redeclared?.id.name === name) return readsName(redeclared.init, name, t);
+        if (readsName(statement, name, t)) return true;
+    }
+    return false;
+}
+
+function readsName(node: any, name: string, t: any): boolean {
+    if (!node) return false;
+    if (t.isIdentifier(node)) return node.name === name;
+    if (t.isBlockStatement(node)) return readsBinding(node.body, name, t);
+    return (t.VISITOR_KEYS[node.type] ?? []).some((key: string) => [node[key]].flat().some((child) => readsName(child, name, t)));
 }
 
 /**

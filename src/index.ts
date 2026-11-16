@@ -5,7 +5,6 @@ import {reactCompilerPlugin} from './react-compiler/plugin';
 export type { CompilationMode, Options, ReactCompilerEvent, ReactCompilerOptions } from './options';
 export { compileKotlinMjs, moduleTypeProvider } from './react-compiler/compile';
 export type { CompileKotlinMjsResult } from './react-compiler/compile';
-export { normalizeKotlinMjs } from './react-compiler/normalize';
 
 export default function reactKotlinJs(options: Options = {}) {
     const resolved = resolveOptions(options);
