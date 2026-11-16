@@ -185,6 +185,8 @@ function readsName(node: any, name: string, t: any): boolean {
  *
  * Module-level `var`s stay as they are: the compiler never lowers them, and another module of an import cycle may
  * call into this one before it is evaluated, which a `var` survives (`undefined`) and a `let` does not (TDZ error).
+ *
+ * Delete once the plugin requires Kotlin 2.5.20, which emits `let` / `const` itself (KT-64348).
  */
 function blockScopeVars(program: any, t: any) {
     const declaratorsByOwner = new Map<any, Map<string, any[]>>();
