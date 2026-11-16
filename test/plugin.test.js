@@ -120,3 +120,10 @@ ${getter}${helpers}
         assert.equal(fastRefresh.transform.handler(exports(''), 'Helpers.mjs'), null);
     });
 });
+
+describe('options', () => {
+    test('fail on compiler options set where 2.x took them', () => {
+        assert.throws(() => reactKotlinJs({ compilationMode: 'all' }), /`compilationMode` is now `reactCompiler\.compilationMode`/);
+        assert.throws(() => reactKotlinJs({ reactCompiler: { include: [/x/] } }), /top-level `include`/);
+    });
+});

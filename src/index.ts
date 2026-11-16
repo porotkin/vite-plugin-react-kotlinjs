@@ -17,6 +17,6 @@ export default function reactKotlinJs(options: Options = {}) {
 }
 
 /** Standalone React Compiler pre-transform, without Fast Refresh. */
-export function kotlinReactCompilerVitePlugin(options: ReactCompilerOptions = {}) {
-    return reactCompilerPlugin(resolveOptions(options));
+export function kotlinReactCompilerVitePlugin({ include, ...reactCompiler }: ReactCompilerOptions & Pick<Options, 'include'> = {}) {
+    return reactCompilerPlugin(resolveOptions({ include, reactCompiler }));
 }

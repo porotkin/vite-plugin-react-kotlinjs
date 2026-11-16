@@ -23,10 +23,10 @@ export interface ReactCompilerOptions {
      * `CompileError` is left as Kotlin/JS emitted it, without any memoization; throwing here fails the build.
      */
     logger?: { logEvent: (filename: string, event: ReactCompilerEvent) => void };
-    include?: Array<string | RegExp>;
 }
 
-export interface Options extends ReactCompilerOptions {
+export interface Options {
+    include?: Array<string | RegExp>;
     isReactFC?: (code: string) => boolean;
     getComponentName?: (code: string) => string | undefined;
     debug?: boolean;
@@ -45,17 +45,22 @@ const defaultGetComponentName = (code: string) => /export {[^}]*get_([\w$]+) as 
 
 export type ResolvedOptions = ReturnType<typeof resolveOptions>;
 
-/** Values in a `reactCompiler` object override the top-level ones; `reactCompiler: false` disables the compiler. */
+const COMPILER_OPTIONS = ['compilationMode', 'preserveExistingMemoizationGuarantees', 'incompatibleHooks', 'logger'];
+
+/** `reactCompiler: false` disables the compiler; an object configures it. */
 export function resolveOptions(options: Options) {
-    const overrides = typeof options.reactCompiler === 'object' ? options.reactCompiler : {};
+    const compiler = typeof options.reactCompiler === 'object' ? options.reactCompiler : {};
+    // Fail a config still using the 2.x locations instead of silently ignoring it (a throwing `logger`, for one).
+    const moved = [
+        ...COMPILER_OPTIONS.filter((key) => key in options).map((key) => `\`${key}\` is now \`reactCompiler.${key}\``),
+        ...('include' in compiler ? ['`reactCompiler.include` is now the top-level `include`'] : []),
+    ];
+    if (moved.length > 0) throw new Error(`[vite-plugin-react-kotlinjs] ${moved.join('; ')}`);
     return {
+        ...compiler,
         reactCompiler: options.reactCompiler !== false,
-        compilationMode: overrides.compilationMode ?? options.compilationMode ?? DEFAULT_COMPILATION_MODE,
-        preserveExistingMemoizationGuarantees:
-            overrides.preserveExistingMemoizationGuarantees ?? options.preserveExistingMemoizationGuarantees,
-        incompatibleHooks: overrides.incompatibleHooks ?? options.incompatibleHooks,
-        logger: overrides.logger ?? options.logger,
-        include: overrides.include ?? options.include ?? DEFAULT_INCLUDE,
+        compilationMode: compiler.compilationMode ?? DEFAULT_COMPILATION_MODE,
+        include: options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,
         // A custom `isReactFC` may accept modules without the default markers, so those can't be pre-filtered.
         reactModuleMarkers: options.isReactFC ? undefined : REACT_MODULE_MARKERS,

@@ -69,34 +69,34 @@ The plugin accepts the following options:
 
 - **Type:** `boolean | ReactCompilerOptions`
 
-Enable/disable or configure the React Compiler pre-transform (`{ compilationMode?: 'annotation' | 'infer' | 'syntax' | 'all', preserveExistingMemoizationGuarantees?: boolean, incompatibleHooks?: Record<string, string[]>, logger?: { logEvent(filename, event) }, include?: Array<string | RegExp> }`).
+Enable/disable or configure the React Compiler pre-transform with the `reactCompiler.*` options below.
 
 The compiler runs only in the Vite build. Kotlin/JS browser tests (`jsBrowserTest`: Karma with webpack) run the same
 code without it, so a hook that promises a stable identity, an event callback for example, keeps its own `useMemo` or
 `useCallback`.
 
-### `compilationMode`
+### `reactCompiler.compilationMode`
 
 - **Type:** `'annotation' | 'infer' | 'syntax' | 'all'`
 - **Default:** `'annotation'`
 
 React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 
-### `preserveExistingMemoizationGuarantees`
+### `reactCompiler.preserveExistingMemoizationGuarantees`
 
 - **Type:** `boolean`
 - **Default:** `true`
 
 Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler` (enabled by default there too). When `true`, a `useMemo` / `useCallback` result stays memoized, and a function whose existing memoization the compiler cannot preserve is left uncompiled. When `false`, more functions compile, but the compiler may drop a `useMemo` and recompute its value on every render: code that relies on the value keeping its identity, such as effect dependencies or options passed to TanStack Table, then sees a new value each render and can loop. Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results, which is what most of the uncompiled functions come from.
 
-### `incompatibleHooks`
+### `reactCompiler.incompatibleHooks`
 
 - **Type:** `Record<string, string[]>`
 - **Default:** `{}`
 
 Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ 'react-use-measure': ['useMeasure'] }`: a function calling one is left uncompiled. They add to the libraries `babel-plugin-react-compiler` knows itself (the `watch()` of `react-hook-form`'s `useForm()`, `useReactTable` of `@tanstack/react-table`, `useVirtualizer` of `@tanstack/react-virtual`), which the plugin keeps a copy of because its `moduleTypeProvider` replaces the compiler's built-in one.
 
-### `logger`
+### `reactCompiler.logger`
 
 - **Type:** `{ logEvent: (filename: string, event: ReactCompilerEvent) => void }`
 
@@ -125,7 +125,7 @@ reactKotlinJs({
 - **Type:** `Array<string | RegExp>`
 - **Default:** `[/\.mjs$/]`
 
-Module ID patterns to include for transformation.
+Module ID patterns to include for transformation, by both plugins.
 
 ### `isReactFC`
 
