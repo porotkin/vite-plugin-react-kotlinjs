@@ -94,7 +94,7 @@ Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExis
 - **Type:** `Record<string, string[]>`
 - **Default:** `{}`
 
-Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ '@tanstack/react-virtual': ['useVirtualizer'] }`: a function calling one is left uncompiled. The plugin's `moduleTypeProvider` replaces `babel-plugin-react-compiler`'s built-in one, so its list of incompatible libraries does not apply; list the hooks of the library versions you use here.
+Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ 'react-use-measure': ['useMeasure'] }`: a function calling one is left uncompiled. They add to the libraries `babel-plugin-react-compiler` knows itself (the `watch()` of `react-hook-form`'s `useForm()`, `useReactTable` of `@tanstack/react-table`, `useVirtualizer` of `@tanstack/react-virtual`), which the plugin keeps a copy of because its `moduleTypeProvider` replaces the compiler's built-in one.
 
 ### `logger`
 

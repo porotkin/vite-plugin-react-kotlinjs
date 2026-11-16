@@ -28,16 +28,54 @@ export function moduleTypeProvider(moduleName: string) {
     return moduleName.endsWith(KOTLIN_JSX_RUNTIME) ? kotlinJsxRuntime : null;
 }
 
-/** Types the hooks listed in `incompatibleHooks` as known incompatible, so the compiler skips functions calling them. */
-function incompatibleModuleType(moduleName: string, hooks: string[]) {
-    const hookType = (hook: string) => ({
-        kind: 'hook',
-        positionalParams: [],
-        restParam: 'read',
-        returnType: { kind: 'type', name: 'Any' },
-        knownIncompatible: `\`${hook}()\` from \`${moduleName}\` is listed in \`incompatibleHooks\``,
-    });
-    return { kind: 'object', properties: Object.fromEntries(hooks.map((hook) => [hook, hookType(hook)])) };
+const incompatibleHook = (knownIncompatible: string) => ({
+    kind: 'hook',
+    positionalParams: [],
+    restParam: 'read',
+    returnType: { kind: 'type', name: 'Any' },
+    knownIncompatible,
+});
+
+/**
+ * The hook types of `babel-plugin-react-compiler`'s own `defaultModuleTypeProvider`, which is not exported and which a
+ * custom provider replaces. Copied from babel-plugin-react-compiler 1.0.0.
+ */
+const BUILT_IN_HOOK_TYPES: Record<string, Record<string, object>> = {
+    'react-hook-form': {
+        // Only the `watch()` function returned by `useForm()` is incompatible.
+        useForm: {
+            kind: 'hook',
+            returnType: {
+                kind: 'object',
+                properties: {
+                    watch: {
+                        kind: 'function',
+                        positionalParams: [],
+                        restParam: 'read',
+                        calleeEffect: 'read',
+                        returnType: { kind: 'type', name: 'Any' },
+                        returnValueKind: 'mutable',
+                        knownIncompatible: "React Hook Form's `useForm()` API returns a `watch()` function which cannot be memoized safely.",
+                    },
+                },
+            },
+        },
+    },
+    '@tanstack/react-table': {
+        useReactTable: incompatibleHook("TanStack Table's `useReactTable()` API returns functions that cannot be memoized safely"),
+    },
+    '@tanstack/react-virtual': {
+        useVirtualizer: incompatibleHook("TanStack Virtual's `useVirtualizer()` API returns functions that cannot be memoized safely"),
+    },
+};
+
+/** The built-in hook types of `moduleName`, with the hooks `incompatibleHooks` lists for it typed as known incompatible. */
+function libraryModuleType(moduleName: string, incompatibleHooks: Record<string, string[]>) {
+    const listed = Object.hasOwn(incompatibleHooks, moduleName) ? incompatibleHooks[moduleName] : [];
+    const builtIn = Object.hasOwn(BUILT_IN_HOOK_TYPES, moduleName) ? BUILT_IN_HOOK_TYPES[moduleName] : undefined;
+    if (!builtIn && listed.length === 0) return null;
+    const listedTypes = listed.map((hook) => [hook, incompatibleHook(`\`${hook}()\` from \`${moduleName}\` is listed in \`incompatibleHooks\``)]);
+    return { kind: 'object', properties: { ...builtIn, ...Object.fromEntries(listedTypes) } };
 }
 
 let toolchain: { babel: any; reactCompiler: any } | undefined;
@@ -84,10 +122,7 @@ export function compileKotlinMjs(
                     panicThreshold: 'none',
                     environment: {
                         moduleTypeProvider: (moduleName: string) =>
-                            moduleTypeProvider(moduleName) ??
-                            (Object.hasOwn(incompatibleHooks, moduleName)
-                                ? incompatibleModuleType(moduleName, incompatibleHooks[moduleName])
-                                : null),
+                            moduleTypeProvider(moduleName) ?? libraryModuleType(moduleName, incompatibleHooks),
                         enablePreserveExistingMemoizationGuarantees: preserveExistingMemoizationGuarantees,
                         validatePreserveExistingMemoizationGuarantees: preserveExistingMemoizationGuarantees,
                     },

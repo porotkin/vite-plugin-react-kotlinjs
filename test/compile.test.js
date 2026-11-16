@@ -92,19 +92,35 @@ export function Foo(props) {
         });
     }
 
-    test('skips functions calling hooks listed in incompatibleHooks, and only those', () => {
-        const input = `import { useReactTable as useReactTable } from '@tanstack/react-table';
+    test('skips functions calling the built-in incompatible hooks and those listed in incompatibleHooks, and only those', () => {
+        const calling = (hook, module) => `import { ${hook} as ${hook} } from '${module}';
 export function useRows(options) {
   'use memo';
-  var table = useReactTable(options);
+  var table = ${hook}(options);
   return table.getRowModel();
 }`;
-        assert.deepEqual(compileKotlinMjs(input).events.map((e) => e.kind), ['CompileSuccess']);
-        const { code, events } = compileKotlinMjs(input, 'module.mjs', {
-            incompatibleHooks: { '@tanstack/react-table': ['useReactTable'] },
-        });
-        assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
-        assert.doesNotMatch(code, /_c\(/);
+        const builtIn = compileKotlinMjs(calling('useReactTable', '@tanstack/react-table'));
+        assert.deepEqual(builtIn.events.map((e) => e.kind), ['CompileError']);
+        assert.doesNotMatch(builtIn.code, /_c\(/);
+
+        const custom = calling('useGrid', 'grid-lib');
+        assert.deepEqual(compileKotlinMjs(custom).events.map((e) => e.kind), ['CompileSuccess']);
+        const listed = { incompatibleHooks: { 'grid-lib': ['useGrid'] } };
+        assert.deepEqual(compileKotlinMjs(custom, 'module.mjs', listed).events.map((e) => e.kind), ['CompileError']);
+        // Listing a hook of a built-in module keeps the built-in ones.
+        const sameModule = { incompatibleHooks: { '@tanstack/react-table': ['useOther'] } };
+        assert.deepEqual(compileKotlinMjs(calling('useReactTable', '@tanstack/react-table'), 'module.mjs', sameModule).events.map((e) => e.kind), ['CompileError']);
+        assert.deepEqual(compileKotlinMjs(calling('useOther', '@tanstack/react-table'), 'module.mjs', sameModule).events.map((e) => e.kind), ['CompileError']);
+
+        // Only `watch()` of react-hook-form's `useForm()` is incompatible, as in the compiler's own list.
+        const form = (body) => `import { useForm as useForm } from 'react-hook-form';
+export function useLogin() {
+  'use memo';
+  var form = useForm();
+  ${body}
+}`;
+        assert.deepEqual(compileKotlinMjs(form('return form.register;')).events.map((e) => e.kind), ['CompileSuccess']);
+        assert.deepEqual(compileKotlinMjs(form("return form.watch('name');")).events.map((e) => e.kind), ['CompileError']);
     });
 
     test('compiles a component whose "use memo" follows Kotlin property initialization', () => {
