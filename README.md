@@ -22,9 +22,10 @@ dependencies {
 ```
 
 React Compiler support needs the Kotlin side prepared by the
-[kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin: it lowers `kotlin-react`
-components and hooks into shapes the compiler understands, and makes Kotlin/JS emit lambdas inline
-(`-Xir-generate-inline-anonymous-functions`), which the compiler requires of a `useMemo` / `useCallback` callback.
+[kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin, version 1.0.7 or newer: it
+lowers `kotlin-react` components and hooks into shapes the compiler understands, emits hook callbacks inline, and
+lowers callable references, ref and state delegates and effect returns in IR. This plugin only rewrites what is left
+of Kotlin/JS code generation.
 
 The project needs ES modules (`useEsModules()`). Fast Refresh treats a module as one component, so it also needs one
 `.mjs` module per Kotlin file: `kotlin.js.ir.output.granularity=per-file` in `gradle.properties`, the layout the plugin
@@ -174,36 +175,6 @@ Output debug information about the transformed files.
      _useFoo$lambda
      ```
 
-   - lifted `useMemo` / `useCallback` / `useEffect` callbacks (also hoisted as `let tmp = () => ...`) → inline arrows
-
-     ```js
-     // before
-     useMemo(useFoo$lambda, []);
-
-     // after
-     useMemo(() => { /* useFoo$lambda body */ }, []);
-     ```
-
-   - `$slambda(...)` / `$ref()` callable references passed to hooks → inline arrows
-
-     ```js
-     // before
-     useMemo(get$ref(), []);
-
-     // after
-     useMemo(() => get$ref()(), []);
-     ```
-
-   - `getLocalDelegateReference` delegate accessors → direct `.current` reads / writes
-
-     ```js
-     // before
-     invoke$lambda(x$delegate);
-
-     // after
-     x$delegate.current;
-     ```
-
    - `BigInt` literals → `BigInt` string calls
 
      ```js
@@ -212,21 +183,6 @@ Output debug information about the transformed files.
 
      // after
      BigInt('1000');
-     ```
-
-   - trailing `return Unit_getInstance()` dropped from `useEffect` callbacks
-
-     ```js
-     // before
-     () => {
-       f();
-       return Unit_getInstance();
-     }
-
-     // after
-     () => {
-       f();
-     }
      ```
 
    - `"use memo"` / `"use no memo"` moved back above Kotlin's `_init_properties_*()` call and default-argument handling,

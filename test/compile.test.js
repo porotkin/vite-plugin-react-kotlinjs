@@ -253,22 +253,13 @@ export function useCount(props) {
         }
     });
 
-    test('compiles hooks with VOID default parameters, BigInt literals and $slambda refs', () => {
-        const { events } = compileKotlinMjs(`import { useCallback, useRef } from 'react';
-import { useEffect1jlgi6hiv8qwn as useEffect } from '../../../kotlin-react/react/useEffect.mjs';
-import { constructCallableReference23y65rf941mch as constructCallableReference } from './reflectRuntime.mjs';
+    test('compiles hooks with VOID default parameters and BigInt literals', () => {
+        const { events } = compileKotlinMjs(`import { useCallback } from 'react';
 export function useAction(value, enabled) {
   enabled = enabled === VOID ? true : enabled;
   'use memo';
   var service = useStableService();
-  var opRef = useRef(null);
-  useEffect([value, enabled], useAction$slambda(value, opRef));
   return useCallback(() => service.run(value, enabled, 1000n), [service, value, enabled]);
-}
-function useAction$slambda($value, $opRef) {
-  return constructCallableReference(($this$useEffect, $completion) => {
-    $opRef.current = $value;
-  }, 1);
 }`);
         assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
     });
@@ -372,18 +363,6 @@ export function useList(a) {
         );
     });
 
-    test('keeps a hoisted callback that is used beyond the hook', () => {
-        const { code } = compileKotlinMjs(`import { useMemo } from 'react';
-export function useThing(a) {
-  'use memo';
-  var cb = () => a + 1;
-  var value = useMemo(cb, [a]);
-  register(cb);
-  return value;
-}`);
-        assert.deepEqual([...unboundNames(code)], ['register']);
-    });
-
     test('leaves module-level var declarations alone', () => {
         const { code, events } = compileKotlinMjs(`import { useState } from 'react';
 var properties_initialized_Foo_kt_1;
@@ -406,19 +385,17 @@ export function useFoo(a) {
     });
 
     test('maps compiled code back to the lines of the Kotlin/JS module', () => {
-        // The directive hoist and the inlined effect callback both move lines, the compiler rewrites the rest.
+        // The directive hoist moves lines, the compiler rewrites the rest.
         const input = `import { useEffect } from 'react';
-import { Unit_getInstance3abc as Unit_getInstance } from './stdlib.mjs';
 export function useTitle(props) {
   _init_properties_Title_kt__a1b2c3();
   'use memo';
   var title = formatTitle(props.title);
-  useEffect(useTitle$lambda, [title]);
+  useEffect(() => {
+    reportTitleShown();
+    return undefined;
+  }, [title]);
   return decorateTitle(title);
-}
-function useTitle$lambda() {
-  reportTitleShown();
-  return Unit_getInstance();
 }`;
         const { code, map } = compileKotlinMjs(input, 'Title.mjs');
         const sourceMap = new SourceMap(map);
