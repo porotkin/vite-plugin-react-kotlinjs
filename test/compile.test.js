@@ -85,8 +85,9 @@ export function Foo(props) {
         test(`compiles the ${variant} output of a project using the Kotlin plugin and kotlin-react`, () => {
             const input = fs.readFileSync(new URL(`./fixtures/kotlin-js/Sample.${variant}.mjs`, import.meta.url), 'utf8');
             const { code, events } = compileKotlinMjs(input, 'Sample.mjs');
-            // `useNow` opts out with "use no memo"; a `CompileError` here means the two plugins have drifted apart.
-            assert.deepEqual(events.map((e) => e.fnName ?? e.kind), ['useVisibleItems', 'CompileSkip', 'Heading', 'TodoList$lambda']);
+            // `useNow` opts out with "use no memo", `Heading` calls no hook so gets no "use memo";
+            // a `CompileError` here means the two plugins have drifted apart.
+            assert.deepEqual(events.map((e) => e.fnName ?? e.kind), ['useVisibleItems', 'CompileSkip', 'useAsyncEffect', 'TodoList$lambda']);
             const before = unboundNames(input);
             assert.deepEqual([...unboundNames(code)].filter((name) => !before.has(name)), []);
         });

@@ -2,17 +2,18 @@
 
 `Sample.development.mjs` and `Sample.production.mjs` are what Kotlin/JS emits for `Sample.kt` in a project that
 applies the [kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin and nothing else
-of note. `compile.test.js` expects React Compiler to compile every function in them except the one that opts out.
+of note. `compile.test.js` expects React Compiler to compile every function in them the Kotlin plugin marks
+`"use memo"`, except the one that opts out.
 
 Regenerate them after a change to either plugin and after a Kotlin or kotlin-wrappers upgrade. They were built with
-Kotlin 2.4.21, kotlin-react-compiler 1.0.3-SNAPSHOT and kotlin-wrappers 2026.11.1-19.3.1, from `Sample.kt` in
+Kotlin 2.4.21, kotlin-react-compiler 1.0.7-SNAPSHOT and kotlin-wrappers 2026.11.1-19.3.1, from `Sample.kt` in
 `src/jsMain/kotlin` of a project named `todo-app` with `kotlin.js.ir.output.granularity=per-file` in
 `gradle.properties` and this `build.gradle.kts`:
 
 ```kotlin
 plugins {
     kotlin("multiplatform") version "2.4.21"
-    id("io.github.porotkin.kotlin-react-compiler") version "1.0.3-SNAPSHOT"
+    id("io.github.porotkin.kotlin-react-compiler") version "1.0.7-SNAPSHOT"
 }
 
 kotlin {

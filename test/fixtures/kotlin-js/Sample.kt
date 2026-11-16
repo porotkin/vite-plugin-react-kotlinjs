@@ -12,6 +12,7 @@ import react.dom.html.ReactHTML.ul
 import react.useCallback
 import react.useEffect
 import react.useMemo
+import react.useRefValue
 import react.useState
 
 external interface TodoListProps : Props {
@@ -36,6 +37,22 @@ fun useNow(clock: Clock): Double {
     return clock.now()
 }
 
+/** Suspends, so an effect calling it runs as a coroutine. */
+private suspend fun loadCount(): Int {
+    kotlinx.coroutines.yield()
+    return 1
+}
+
+/** A custom hook taking a suspend lambda. */
+fun useAsyncEffect(
+    key: Any?,
+    block: suspend () -> Unit,
+) {
+    useEffect(key) { block() }
+}
+
+private fun describe(item: String): String = "Item $item"
+
 private fun ChildrenBuilder.Heading(title: String) {
     span { +title }
 }
@@ -46,19 +63,29 @@ val TodoList: FC<TodoListProps> = FC { props ->
     val label = run { if (expanded) "Collapse" else "Expand" }
     val toggle = useCallback(expanded) { setExpanded(!expanded) }
     useEffect(expanded) { console.log(expanded) }
+    var clicks by useState(0)
+    var lastItem by useRefValue("")
+    var loaded by useState(0)
+    useEffect(props.title) { loaded = loadCount() }
+    useAsyncEffect(expanded) { lastItem = visible.firstOrNull() ?: "" }
+    val describeItem = useCallback(callback = ::describe)
 
     Heading(props.title)
     div {
         button {
-            onClick = { toggle() }
-            +label
+            onClick = {
+                clicks += 1
+                toggle()
+            }
+            +"$label $clicks $loaded"
+
         }
         if (expanded) {
             ul {
                 for (item in visible) {
                     li {
                         key = Key(item)
-                        +item
+                        +describeItem(item)
                     }
                 }
             }
@@ -67,6 +94,7 @@ val TodoList: FC<TodoListProps> = FC { props ->
 }
 
 /** Keeps the declarations above in the production output. */
+@Suppress("REACT_RULES_OF_HOOKS")
 fun main() {
     console.log(TodoList, useNow(js("({ now: function () { return 0; } })")))
 }
