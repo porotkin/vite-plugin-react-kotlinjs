@@ -51,6 +51,12 @@ fun useAsyncEffect(
     useEffect(key) { block() }
 }
 
+/** React does not own it, so an effect may write to it although a hook returned it. */
+@com.github.porotkin.reactcompiler.Mutable
+class Selection {
+    var last: String = ""
+}
+
 private fun describe(item: String): String = "Item $item"
 
 private fun ChildrenBuilder.Heading(title: String) {
@@ -69,6 +75,8 @@ val TodoList: FC<TodoListProps> = FC { props ->
     useEffect(props.title) { loaded = loadCount() }
     useAsyncEffect(expanded) { lastItem = visible.firstOrNull() ?: "" }
     val describeItem = useCallback(callback = ::describe)
+    val selection = useMemo { Selection() }
+    useEffect(clicks) { selection.last = label }
 
     Heading(props.title)
     div {

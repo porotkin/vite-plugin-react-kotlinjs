@@ -11,18 +11,20 @@ import { VOID3gxj6tk5isa35 as VOID } from '../../kotlin-kotlin-stdlib/kotlin/js/
 import { take306tavhandd2q as take } from '../../kotlin-kotlin-stdlib/kotlin/collections/_Arrays.mjs';
 import { Unit_instance3kz1zqli6gr1r as Unit_instance } from '../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
 import { createCleanupCallback25lsm9rsfgs13 as createCleanupCallback } from '../../kotlin-react/react/internal/createCleanupCallback.mjs';
+import { protoOf180f3jzyo7rfj as protoOf } from '../../kotlin-kotlin-stdlib/kotlin/js/coreRuntime.mjs';
+import {
+  initMetadataForClassbxx6q50dy2s7 as initMetadataForClass,
+  initMetadataForLambda3af3he42mmnh as initMetadataForLambda,
+  initMetadataForCoroutine1i7lbatuf5bnt as initMetadataForCoroutine,
+} from '../../kotlin-kotlin-stdlib/kotlin/js/metadataUtils.mjs';
 import { ReactHTML_instanced0ci4wsv0lrw as ReactHTML_instance } from '../../kotlin-react-dom/react/dom/html/ReactHTML.mjs';
 import { jsx2uf3lx2x6pvok as jsx } from '../../kotlin-react/react/jsx/runtime/jsx.mjs';
+import { mutableValue2fwfgja1l9ns6 as mutableValue } from '../../kotlin_io_github_porotkin_reactcompiler_annotations/com/github/porotkin/reactcompiler/MutableValue.mjs';
 import { CoroutineImpl2sn3kjnwmfr10 as CoroutineImpl } from '../../kotlin-kotlin-stdlib/kotlin/coroutines/CoroutineImpl.mjs';
-import { protoOf180f3jzyo7rfj as protoOf } from '../../kotlin-kotlin-stdlib/kotlin/js/coreRuntime.mjs';
 import { THROW_CCE2g6jy02ryeudk as THROW_CCE } from '../../kotlin-kotlin-stdlib/kotlin/hacks.mjs';
 import { CoroutineScopefcb5f5dwqcas as CoroutineScope } from '../../kotlinx-coroutines-core/kotlinx/coroutines/CoroutineScope.mjs';
 import { isInterface3d6p8outrmvmk as isInterface } from '../../kotlin-kotlin-stdlib/kotlin/js/typeCheckUtils.mjs';
 import { get_COROUTINE_SUSPENDED3ujt3p13qm4iy as get_COROUTINE_SUSPENDED } from '../../kotlin-kotlin-stdlib/kotlin/coroutines/intrinsics/Intrinsics.mjs';
-import {
-  initMetadataForLambda3af3he42mmnh as initMetadataForLambda,
-  initMetadataForCoroutine1i7lbatuf5bnt as initMetadataForCoroutine,
-} from '../../kotlin-kotlin-stdlib/kotlin/js/metadataUtils.mjs';
 import { constructCallableReference23y65rf941mch as constructCallableReference } from '../../kotlin-kotlin-stdlib/kotlin/js/reflectRuntime.mjs';
 import { firstOrNull1982767dljvdy as firstOrNull } from '../../kotlin-kotlin-stdlib/kotlin/collections/_Collections.mjs';
 import { yield7e67oxleds6v as yield_0 } from '../../kotlinx-coroutines-core/kotlinx/coroutines/Yield.mjs';
@@ -61,6 +63,17 @@ function useAsyncEffect(key, block) {
   useEffect(function () {
     return createCleanupCallback(useAsyncEffect$lambda$slambda_0(block, null))();
   }, [key]);
+}
+var SelectionClass;
+function Selection() {
+  if (SelectionClass === VOID) {
+    initMetadataForClass($, 'Selection', Selection);
+    function $() {
+      this.ih_1 = '';
+    }
+    SelectionClass = $;
+  }
+  return SelectionClass;
 }
 function describe(item) {
   _init_properties_Sample_kt__5scu0m();
@@ -135,6 +148,13 @@ function TodoList$lambda(props) {
   var describeItem = useCallback(function (p0) {
     return describe(p0);
   }, []);
+  var selection = useMemo(function () {
+    return new (Selection())();
+  }, []);
+  useEffect(function () {
+    mutableValue(selection).ih_1 = label;
+    return undefined;
+  }, [clicks]);
   var el = Heading(props.title);
   // Inline function 'react.dom.html.ReactHTML.div' call
   // Inline function 'react.IntrinsicType' call
@@ -156,7 +176,7 @@ function TodoList$lambda(props) {
   };
   var text = label + ' ' + clicks + ' ' + loaded;
   attrs.children = text;
-  var el_0 = jsx(type_0, attrs, '@rdk/wp9u5k/74_8');
+  var el_0 = jsx(type_0, attrs, '@rdk/wp9u5k/82_8');
   var tmp;
   if (expanded) {
     // Inline function 'react.dom.html.ReactHTML.ul' call
@@ -188,7 +208,7 @@ function TodoList$lambda(props) {
     }
     var attrs_1 = {};
     attrs_1.children = children;
-    var el_2 = jsxs(type_1, attrs_1, '@rdk/wp9u5k/83_12');
+    var el_2 = jsxs(type_1, attrs_1, '@rdk/wp9u5k/91_12');
     tmp = el_2;
   } else {
     tmp = null;
@@ -196,7 +216,7 @@ function TodoList$lambda(props) {
   var el_3 = tmp;
   var attrs_2 = {};
   attrs_2.children = [el_0, el_3];
-  var el_4 = jsxs(type, attrs_2, '@rdk/wp9u5k/73_4');
+  var el_4 = jsxs(type, attrs_2, '@rdk/wp9u5k/81_4');
   var attrs_3 = {};
   attrs_3.children = [el, el_4];
   return jsxs(Fragment, attrs_3);
@@ -206,17 +226,17 @@ function TodoList$lambda$lambda$slambda() {
   if (TodoList$lambda$lambda$slambdaClass === VOID) {
     initMetadataForLambda($, CoroutineImpl(), VOID, [1]);
     function $($setLoaded, resultContinuation) {
-      this.qh_1 = $setLoaded;
+      this.rh_1 = $setLoaded;
       CoroutineImpl().call(this, resultContinuation);
     }
-    protoOf($).sh = function ($this$useEffect, $completion) {
-      var tmp = this.th($this$useEffect, $completion);
+    protoOf($).th = function ($this$useEffect, $completion) {
+      var tmp = this.uh($this$useEffect, $completion);
       tmp.z3_1 = Unit_instance;
       tmp.a4_1 = null;
       return tmp.f4();
     };
     protoOf($).n4 = function (p1, $completion) {
-      return this.sh((!(p1 == null) ? isInterface(p1, CoroutineScope()) : false) ? p1 : THROW_CCE(), $completion);
+      return this.th((!(p1 == null) ? isInterface(p1, CoroutineScope()) : false) ? p1 : THROW_CCE(), $completion);
     };
     protoOf($).f4 = function () {
       var suspendResult = this.z3_1;
@@ -235,7 +255,7 @@ function TodoList$lambda$lambda$slambda() {
               continue $sm;
             case 1:
               var ARGUMENT = suspendResult;
-              this.qh_1(ARGUMENT);
+              this.rh_1(ARGUMENT);
               return Unit_instance;
             case 2:
               throw this.a4_1;
@@ -251,9 +271,9 @@ function TodoList$lambda$lambda$slambda() {
         }
        while (true);
     };
-    protoOf($).th = function ($this$useEffect, completion) {
-      var i = new (TodoList$lambda$lambda$slambda())(this.qh_1, completion);
-      i.rh_1 = $this$useEffect;
+    protoOf($).uh = function ($this$useEffect, completion) {
+      var i = new (TodoList$lambda$lambda$slambda())(this.rh_1, completion);
+      i.sh_1 = $this$useEffect;
       return i;
     };
     TodoList$lambda$lambda$slambdaClass = $;
@@ -263,7 +283,7 @@ function TodoList$lambda$lambda$slambda() {
 function TodoList$lambda$lambda$slambda_0($setLoaded, resultContinuation) {
   var i = new (TodoList$lambda$lambda$slambda())($setLoaded, resultContinuation);
   return constructCallableReference(function ($this$useEffect, $completion) {
-    return i.sh($this$useEffect, $completion);
+    return i.th($this$useEffect, $completion);
   }, 1);
 }
 var TodoList$lambda$lambda$slambdaClass_0;
@@ -271,18 +291,18 @@ function TodoList$lambda$lambda$slambda_1() {
   if (TodoList$lambda$lambda$slambdaClass_0 === VOID) {
     initMetadataForLambda($, CoroutineImpl(), VOID, [0]);
     function $($lastItem, $visible, resultContinuation) {
-      this.ci_1 = $lastItem;
-      this.di_1 = $visible;
+      this.di_1 = $lastItem;
+      this.ei_1 = $visible;
       CoroutineImpl().call(this, resultContinuation);
     }
-    protoOf($).ei = function ($completion) {
-      var tmp = this.fi($completion);
+    protoOf($).fi = function ($completion) {
+      var tmp = this.gi($completion);
       tmp.z3_1 = Unit_instance;
       tmp.a4_1 = null;
       return tmp.f4();
     };
-    protoOf($).gi = function ($completion) {
-      return this.ei($completion);
+    protoOf($).hi = function ($completion) {
+      return this.fi($completion);
     };
     protoOf($).f4 = function () {
       var suspendResult = this.z3_1;
@@ -291,8 +311,8 @@ function TodoList$lambda$lambda$slambda_1() {
           var tmp = this.x3_1;
           if (tmp === 0) {
             this.y3_1 = 1;
-            var tmp0 = this.ci_1;
-            var tmp0_elvis_lhs = firstOrNull(this.di_1);
+            var tmp0 = this.di_1;
+            var tmp0_elvis_lhs = firstOrNull(this.ei_1);
             tmp0.current = tmp0_elvis_lhs == null ? '' : tmp0_elvis_lhs;
             return Unit_instance;
           } else if (tmp === 1) {
@@ -304,8 +324,8 @@ function TodoList$lambda$lambda$slambda_1() {
         }
        while (true);
     };
-    protoOf($).fi = function (completion) {
-      return new (TodoList$lambda$lambda$slambda_1())(this.ci_1, this.di_1, completion);
+    protoOf($).gi = function (completion) {
+      return new (TodoList$lambda$lambda$slambda_1())(this.di_1, this.ei_1, completion);
     };
     TodoList$lambda$lambda$slambdaClass_0 = $;
   }
@@ -314,7 +334,7 @@ function TodoList$lambda$lambda$slambda_1() {
 function TodoList$lambda$lambda$slambda_2($lastItem, $visible, resultContinuation) {
   var i = new (TodoList$lambda$lambda$slambda_1())($lastItem, $visible, resultContinuation);
   return constructCallableReference(function ($completion) {
-    return i.ei($completion);
+    return i.fi($completion);
   }, 0);
 }
 var useAsyncEffect$lambda$slambdaClass;
@@ -322,17 +342,17 @@ function useAsyncEffect$lambda$slambda() {
   if (useAsyncEffect$lambda$slambdaClass === VOID) {
     initMetadataForLambda($, CoroutineImpl(), VOID, [1]);
     function $($block, resultContinuation) {
-      this.pi_1 = $block;
+      this.qi_1 = $block;
       CoroutineImpl().call(this, resultContinuation);
     }
-    protoOf($).sh = function ($this$useEffect, $completion) {
-      var tmp = this.th($this$useEffect, $completion);
+    protoOf($).th = function ($this$useEffect, $completion) {
+      var tmp = this.uh($this$useEffect, $completion);
       tmp.z3_1 = Unit_instance;
       tmp.a4_1 = null;
       return tmp.f4();
     };
     protoOf($).n4 = function (p1, $completion) {
-      return this.sh((!(p1 == null) ? isInterface(p1, CoroutineScope()) : false) ? p1 : THROW_CCE(), $completion);
+      return this.th((!(p1 == null) ? isInterface(p1, CoroutineScope()) : false) ? p1 : THROW_CCE(), $completion);
     };
     protoOf($).f4 = function () {
       var suspendResult = this.z3_1;
@@ -343,7 +363,7 @@ function useAsyncEffect$lambda$slambda() {
             case 0:
               this.y3_1 = 2;
               this.x3_1 = 1;
-              suspendResult = this.pi_1(this);
+              suspendResult = this.qi_1(this);
               if (suspendResult === get_COROUTINE_SUSPENDED()) {
                 return suspendResult;
               }
@@ -365,9 +385,9 @@ function useAsyncEffect$lambda$slambda() {
         }
        while (true);
     };
-    protoOf($).th = function ($this$useEffect, completion) {
-      var i = new (useAsyncEffect$lambda$slambda())(this.pi_1, completion);
-      i.qi_1 = $this$useEffect;
+    protoOf($).uh = function ($this$useEffect, completion) {
+      var i = new (useAsyncEffect$lambda$slambda())(this.qi_1, completion);
+      i.ri_1 = $this$useEffect;
       return i;
     };
     useAsyncEffect$lambda$slambdaClass = $;
@@ -377,7 +397,7 @@ function useAsyncEffect$lambda$slambda() {
 function useAsyncEffect$lambda$slambda_0($block, resultContinuation) {
   var i = new (useAsyncEffect$lambda$slambda())($block, resultContinuation);
   return constructCallableReference(function ($this$useEffect, $completion) {
-    return i.sh($this$useEffect, $completion);
+    return i.th($this$useEffect, $completion);
   }, 1);
 }
 var $loadCountCOROUTINE$Class;

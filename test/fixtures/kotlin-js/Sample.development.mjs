@@ -11,18 +11,20 @@ import { VOID3gxj6tk5isa35 as VOID } from '../../kotlin-kotlin-stdlib/kotlin/js/
 import { take306tavhandd2q as take } from '../../kotlin-kotlin-stdlib/kotlin/collections/_Arrays.mjs';
 import { Unit_getInstanceu5z48rdn3d6z as Unit_getInstance } from '../../kotlin-kotlin-stdlib/kotlin/Unit.mjs';
 import { createCleanupCallback25lsm9rsfgs13 as createCleanupCallback } from '../../kotlin-react/react/internal/createCleanupCallback.mjs';
+import { protoOf180f3jzyo7rfj as protoOf } from '../../kotlin-kotlin-stdlib/kotlin/js/coreRuntime.mjs';
+import {
+  initMetadataForClassbxx6q50dy2s7 as initMetadataForClass,
+  initMetadataForLambda3af3he42mmnh as initMetadataForLambda,
+  initMetadataForCoroutine1i7lbatuf5bnt as initMetadataForCoroutine,
+} from '../../kotlin-kotlin-stdlib/kotlin/js/metadataUtils.mjs';
 import { ReactHTML_getInstance16d6dkjg7cthd as ReactHTML_getInstance } from '../../kotlin-react-dom/react/dom/html/ReactHTML.mjs';
 import { jsx2uf3lx2x6pvok as jsx } from '../../kotlin-react/react/jsx/runtime/jsx.mjs';
+import { mutableValue2fwfgja1l9ns6 as mutableValue } from '../../kotlin_io_github_porotkin_reactcompiler_annotations/com/github/porotkin/reactcompiler/MutableValue.mjs';
 import { CoroutineImpl2sn3kjnwmfr10 as CoroutineImpl } from '../../kotlin-kotlin-stdlib/kotlin/coroutines/CoroutineImpl.mjs';
-import { protoOf180f3jzyo7rfj as protoOf } from '../../kotlin-kotlin-stdlib/kotlin/js/coreRuntime.mjs';
 import { THROW_CCE2g6jy02ryeudk as THROW_CCE } from '../../kotlin-kotlin-stdlib/kotlin/hacks.mjs';
 import { CoroutineScopefcb5f5dwqcas as CoroutineScope } from '../../kotlinx-coroutines-core/kotlinx/coroutines/CoroutineScope.mjs';
 import { isInterface3d6p8outrmvmk as isInterface } from '../../kotlin-kotlin-stdlib/kotlin/js/typeCheckUtils.mjs';
 import { get_COROUTINE_SUSPENDED3ujt3p13qm4iy as get_COROUTINE_SUSPENDED } from '../../kotlin-kotlin-stdlib/kotlin/coroutines/intrinsics/Intrinsics.mjs';
-import {
-  initMetadataForLambda3af3he42mmnh as initMetadataForLambda,
-  initMetadataForCoroutine1i7lbatuf5bnt as initMetadataForCoroutine,
-} from '../../kotlin-kotlin-stdlib/kotlin/js/metadataUtils.mjs';
 import { constructCallableReference23y65rf941mch as constructCallableReference } from '../../kotlin-kotlin-stdlib/kotlin/js/reflectRuntime.mjs';
 import { firstOrNull1982767dljvdy as firstOrNull } from '../../kotlin-kotlin-stdlib/kotlin/collections/_Collections.mjs';
 import { yield7e67oxleds6v as yield_0 } from '../../kotlinx-coroutines-core/kotlinx/coroutines/Yield.mjs';
@@ -65,6 +67,23 @@ function useAsyncEffect(key, block) {
   useEffect(function () {
     return createCleanupCallback(useAsyncEffect$lambda$slambda_0(block, null))();
   }, [key]);
+}
+var SelectionClass;
+function Selection() {
+  if (SelectionClass === VOID) {
+    initMetadataForClass($, 'Selection', Selection);
+    function $() {
+      this.last_1 = '';
+    }
+    protoOf($).set_last_yh77gp_k$ = function (_set____db54di) {
+      this.last_1 = _set____db54di;
+    };
+    protoOf($).get_last_wopotb_k$ = function () {
+      return this.last_1;
+    };
+    SelectionClass = $;
+  }
+  return SelectionClass;
 }
 function describe(item) {
   _init_properties_Sample_kt__5scu0m();
@@ -140,6 +159,13 @@ function TodoList$lambda(props) {
   var describeItem = useCallback(function (p0) {
     return describe(p0);
   }, []);
+  var selection = useMemo(function () {
+    return new (Selection())();
+  }, []);
+  useEffect(function () {
+    mutableValue(selection).last_1 = label;
+    return undefined;
+  }, [clicks]);
   var el = Heading(props.title);
   // Inline function 'react.dom.html.ReactHTML.div' call
   ReactHTML_getInstance();
@@ -163,7 +189,7 @@ function TodoList$lambda(props) {
   };
   var text = label + ' ' + clicks + ' ' + loaded;
   attrs.children = text;
-  var el_0 = jsx(type_0, attrs, '@rdk/wp9u5k/74_8');
+  var el_0 = jsx(type_0, attrs, '@rdk/wp9u5k/82_8');
   var tmp;
   if (expanded) {
     // Inline function 'react.dom.html.ReactHTML.ul' call
@@ -197,7 +223,7 @@ function TodoList$lambda(props) {
     }
     var attrs_1 = {};
     attrs_1.children = children;
-    var el_2 = jsxs(type_1, attrs_1, '@rdk/wp9u5k/83_12');
+    var el_2 = jsxs(type_1, attrs_1, '@rdk/wp9u5k/91_12');
     tmp = el_2;
   } else {
     tmp = null;
@@ -205,7 +231,7 @@ function TodoList$lambda(props) {
   var el_3 = tmp;
   var attrs_2 = {};
   attrs_2.children = [el_0, el_3];
-  var el_4 = jsxs(type, attrs_2, '@rdk/wp9u5k/73_4');
+  var el_4 = jsxs(type, attrs_2, '@rdk/wp9u5k/81_4');
   var attrs_3 = {};
   attrs_3.children = [el, el_4];
   return jsxs(Fragment, attrs_3);
