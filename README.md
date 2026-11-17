@@ -68,6 +68,7 @@ The plugin accepts the following options:
 ### `reactCompiler`
 
 - **Type:** `boolean | ReactCompilerOptions`
+- **Default:** `true`
 
 Enable/disable or configure the React Compiler pre-transform with the `reactCompiler.*` options below.
 
@@ -125,13 +126,14 @@ reactKotlinJs({
 - **Type:** `Array<string | RegExp>`
 - **Default:** `[/\.mjs$/]`
 
-Module ID patterns to include for transformation, by both plugins.
+Module ID patterns to include for transformation, by both plugins. Modules in `node_modules` are always skipped.
 
 ### `isReactFC`
 
 - **Type:** `(code: string) => boolean`
 
-Custom function to check if the code is a React functional component.
+Custom function to check if the code is a React functional component. Unless `reactCompiler.compilationMode` is
+`'annotation'`, it also picks the modules the React Compiler compiles.
 
 ### `getComponentName`
 
