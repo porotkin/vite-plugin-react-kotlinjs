@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createRequire, SourceMap} from 'node:module';
 import {describe, test} from 'node:test';
-import {compileKotlinMjs} from '../dist/index.js';
+import {compileKotlinMjs, moduleTypeProvider} from '../dist/index.js';
 import {bigIntLiterals, stateHookCases} from './fixtures/prepass-cases.js';
 
 describe('compileKotlinMjs', () => {
@@ -90,6 +90,9 @@ export function Foo(props) {
             assert.deepEqual(events.map((e) => e.fnName ?? e.kind), ['useVisibleItems', 'CompileSkip', 'useAsyncEffect', 'TodoList$lambda']);
             const before = unboundNames(input);
             assert.deepEqual([...unboundNames(code)].filter((name) => !before.has(name)), []);
+            // Untyped, `mutableValue()` would let a write during render compile too.
+            const mutableValueModule = /import \{ mutableValue\w* as mutableValue \} from '([^']+)'/.exec(input)?.[1];
+            assert.ok(mutableValueModule && moduleTypeProvider(mutableValueModule), `mutableValue() imported from ${mutableValueModule}`);
         });
     }
 
@@ -122,6 +125,32 @@ export function useLogin() {
 }`;
         assert.deepEqual(compileKotlinMjs(form('return form.register;')).events.map((e) => e.kind), ['CompileSuccess']);
         assert.deepEqual(compileKotlinMjs(form("return form.watch('name');")).events.map((e) => e.kind), ['CompileError']);
+    });
+
+    test("lets an effect write to a value read through kotlin-react-compiler's mutableValue(), but not render", () => {
+        const writing = (module, body) => `import { useEffect } from 'react';
+import { mutableValue1x2y3z as mutableValue } from '${module}';
+export function useIndeterminate(input, indeterminate) {
+  'use memo';
+  ${body}
+}`;
+        const inEffect = `useEffect(function () {
+    mutableValue(input).indeterminate = indeterminate;
+    return undefined;
+  }, [input, indeterminate]);`;
+        const duringRender = `var apply = function () {
+    mutableValue(input).indeterminate = indeterminate;
+  };
+  apply();`;
+        const kinds = (code) => compileKotlinMjs(code).events.map((e) => e.detail?.reason ?? e.detail?.options?.reason ?? e.kind);
+        // Per-file output, then per-module output.
+        for (const module of [
+            '../../kotlin_io_github_porotkin_reactcompiler_annotations/com/github/porotkin/reactcompiler/MutableValue.mjs',
+            './kotlin_io_github_porotkin_reactcompiler_annotations.mjs',
+        ]) {
+            assert.deepEqual(kinds(writing(module, inEffect)), ['CompileSuccess'], module);
+            assert.deepEqual(kinds(writing(module, duringRender)), ['This value cannot be modified'], module);
+        }
     });
 
     test('compiles a component whose "use memo" follows Kotlin property initialization', () => {

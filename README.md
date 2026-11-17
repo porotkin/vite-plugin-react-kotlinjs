@@ -151,7 +151,9 @@ Output debug information about the transformed files.
    (or every React module, unless `compilationMode` is `'annotation'`) in one Babel pass: a pre-pass rewrites what
    Kotlin/JS code generation emits into what the compiler accepts, then `babel-plugin-react-compiler` runs with a custom
    `environment.moduleTypeProvider` that tells it `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX
-   runtime return frozen values. The pre-pass:
+   runtime return frozen values, and that kotlin-react-compiler's `mutableValue()`, through which it reads a DOM node,
+   ref or signal an effect writes to, returns a value from outside React: the write compiles in the effect and is
+   still rejected during render. The pre-pass:
 
    - moves `"use memo"` / `"use no memo"` back above Kotlin's `_init_properties_*()` call and default-argument handling,
      both of them when a function opts out

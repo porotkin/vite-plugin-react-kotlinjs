@@ -21,10 +21,31 @@ const reactJsxRuntime = { kind: 'object', properties: { jsx: jsxFunction, jsxs: 
 // Kotlin/JS imports kotlin-react's `jsx()` under a mangled name (`jsx2uf3lx2x6pvok`), so `'*'` types every export.
 const kotlinJsxRuntime = { kind: 'object', properties: { '*': jsxFunction } };
 
-/** Kotlin/JS calls `jsx()` / `jsxs()` directly, so the compiler is told they freeze props and return frozen values. */
+/**
+ * kotlin-react-compiler's `mutableValue(x)`, which returns `x`: KRC reads the receiver of a write in an effect or a
+ * callback through it, when that receiver is a value React does not own (a DOM node, a ref, a signal). Typed as a value
+ * from outside React (`global`), the write compiles in the effect and is still rejected during render.
+ */
+const mutableValueFunction = {
+    kind: 'function',
+    positionalParams: ['read'],
+    restParam: null,
+    calleeEffect: 'read',
+    returnType: { kind: 'type', name: 'Any' },
+    returnValueKind: 'global',
+};
+const krcMutableValue = { kind: 'object', properties: { '*': mutableValueFunction } };
+// Alone in its file in per-file output; the annotations module's only export in per-module output.
+const KRC_MUTABLE_VALUE_MODULES = ['/com/github/porotkin/reactcompiler/MutableValue.mjs', '_reactcompiler_annotations.mjs'];
+
+/**
+ * Kotlin/JS calls `jsx()` / `jsxs()` directly, so the compiler is told they freeze props and return frozen values;
+ * kotlin-react-compiler's `mutableValue()` is typed as returning a value React does not own.
+ */
 export function moduleTypeProvider(moduleName: string) {
     if (moduleName === 'react/jsx-runtime') return reactJsxRuntime;
-    return moduleName.endsWith(KOTLIN_JSX_RUNTIME) ? kotlinJsxRuntime : null;
+    if (moduleName.endsWith(KOTLIN_JSX_RUNTIME)) return kotlinJsxRuntime;
+    return KRC_MUTABLE_VALUE_MODULES.some((suffix) => moduleName.endsWith(suffix)) ? krcMutableValue : null;
 }
 
 const incompatibleHook = (knownIncompatible: string) => ({
