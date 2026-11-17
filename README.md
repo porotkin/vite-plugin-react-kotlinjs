@@ -217,6 +217,20 @@ reactKotlinJs({
       of an import cycle may be called before it is evaluated. (Kotlin/JS emits `let` / `const` itself starting with
       Kotlin 2.5.20, see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348); this rewrite goes then.)
 
+    - imported `$ref` helpers (production Kotlin/JS moves callable-reference helpers into the target's module) → a
+      `_`-prefixed module-level alias, since the compiler treats any import named `use*` as a hook
+
+      ```js
+      // before
+      import { useFoo$ref1a2b3c4d as useFoo$ref } from './Foo.mjs';
+      useFoo$ref();
+
+      // after
+      import { useFoo$ref1a2b3c4d as useFoo$ref } from './Foo.mjs';
+      let _useFoo$ref = useFoo$ref;
+      _useFoo$ref();
+      ```
+
     - Kotlin default arguments → `let` locals, since the compiler rejects reassigned hook parameters
 
       ```js
