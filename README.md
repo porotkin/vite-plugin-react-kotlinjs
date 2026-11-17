@@ -147,6 +147,29 @@ Custom function to extract React component names from the code. Useful if your K
 
 Output debug information about the transformed files.
 
+## Migrating from 2.x
+
+The React Compiler options moved under `reactCompiler`, and its `include` became the top-level one, shared by both
+plugins. A config still using the old locations fails with an error naming each option to move:
+
+```javascript
+// before
+reactKotlinJs({
+    compilationMode: 'infer',
+    logger: { logEvent },
+    reactCompiler: { include: [/\.mjs$/] },
+})
+
+// after
+reactKotlinJs({
+    include: [/\.mjs$/],
+    reactCompiler: {
+        compilationMode: 'infer',
+        logger: { logEvent },
+    },
+})
+```
+
 ## How it works
 
 1. **React Compiler Pre-Transform:** The `kotlin-react-compiler` plugin compiles modules that opt in with `"use memo"`
