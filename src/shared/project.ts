@@ -3,8 +3,10 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 // Kotlin/JS installs npm dependencies under `build/js`, not next to `vite.config`,
-// so tooling is resolved from the Kotlin/JS project to use its own versions.
-const PACKAGE_JSON_CANDIDATES = ['build/js/package.json', '../build/js/package.json', '../../package.json', 'package.json'];
+// so tooling is resolved from the Kotlin/JS project to use its own versions. Run from a Kotlin/JS package
+// (`build/js/packages/<name>`), its own `package.json` comes first: npm nests a dependency there when hoisting it
+// would break another package's peer range, and resolution still walks up to the hoisted ones.
+const PACKAGE_JSON_CANDIDATES = ['build/js/package.json', '../build/js/package.json', 'package.json', '../../package.json'];
 
 function createProjectRequire() {
     const packageJson = PACKAGE_JSON_CANDIDATES
