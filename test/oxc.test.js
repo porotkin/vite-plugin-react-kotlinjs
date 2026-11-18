@@ -117,6 +117,60 @@ export { useHandler as useHandler1a2b3c };`);
         assert.equal(events[0].fnLoc.start.line, 4);
     });
 
+    test('hoist a memo directive above Kotlin property initialization without running Babel', () => {
+        const code = `function App(props) {
+  _init_properties_App_kt();
+  'use memo';
+  // preserve this comment
+  return props.value;
+}
+export { App };`;
+        const { prepared, compiled } = compile(code);
+        const preparedCode = prepared.code.replace(/\n\/\*__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__\*\/$/, '');
+
+        assert.equal(prepared.map, null);
+        assert.equal(preparedCode.split('\n').length, code.split('\n').length);
+        assert.equal(
+            preparedCode
+                .replace("function App(props) {'use memo';", 'function App(props) {')
+                .replace(/^ +$/m, "  'use memo';"),
+            code,
+        );
+        assert.match(preparedCode, /\/\/ preserve this comment/);
+        assert.doesNotMatch(compiled.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__/);
+    });
+
+    test('run Babel for a module with function-local var declarations', () => {
+        const { prepared, compiled } = compile(`function App(props) {
+  'use memo';
+  var value = props.value;
+  return value;
+}
+export { App };`);
+
+        assert.match(prepared.code, /let value = props\.value;/);
+        assert.match(compiled.code, /const value = props\.value;/);
+        assert.doesNotMatch(compiled.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__/);
+    });
+
+    test('run Babel for listed incompatible-hook sources without JSX runtime imports', () => {
+        const { prepared, events } = compile(`import { useWindowVirtualizer as useWindowVirtualizer } from 'my-virtualizer';
+function useRows(options) {
+  'use memo';
+  return useWindowVirtualizer(options);
+}
+export { useRows };`, {
+            compilationMode: 'infer',
+            incompatibleHooks: { 'my-virtualizer': ['useWindowVirtualizer'] },
+        });
+
+        assert.ok(prepared.map);
+        assert.match(prepared.code, /use no memo/);
+        assert.deepEqual(events.map((event) => [event.kind, event.fnName, event.detail.category]), [
+            ['CompileError', 'useRows', 'IncompatibleLibrary'],
+        ]);
+    });
+
     test('skip modules without "use memo" in annotation mode', () => {
         const { prepared } = compile(`import { jsx as jsx } from 'react/jsx-runtime';
 function App() {

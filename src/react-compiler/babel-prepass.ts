@@ -6,6 +6,15 @@ const SYNTHETIC_HELPER = /^(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$/;
 const MEMO_DIRECTIVES = new Set(['use memo', 'use no memo']);
 const STATE_HOOKS = new Set(['useState', 'useTransition']);
 
+export function mayNeedPrepass(code: string): boolean {
+    const directivePrologue = /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*(?:\r?\n|$)|"(?:\\.|[^"\\])*"\s*;?\s*|'(?:\\.|[^'\\])*'\s*;?\s*)*$/;
+    for (const match of code.matchAll(/(["'])use (?:no )?memo\1/g)) {
+        const bodyStart = code.lastIndexOf('{', match.index);
+        if (bodyStart < 0 || !directivePrologue.test(code.slice(bodyStart + 1, match.index))) return true;
+    }
+    return /[^\n]\bvar\b|\bfunction\s+\*?\s*(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$|\buse(?:State|Transition)\b|\bimport\b[\s\S]*?\$ref|===\s*VOID\b|\.ref\b/.test(code);
+}
+
 /**
  * Rewrites the JavaScript Kotlin/JS emits into code `babel-plugin-react-compiler` accepts. Kotlin semantics
  * (hook callbacks, callable references, delegates, effect returns) are lowered by kotlin-react-compiler in IR;

@@ -1,6 +1,6 @@
 import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type CompilationMode, type ReactCompilerEvent, type ReactCompilerOptions} from '../options';
 import {projectRequire} from '../shared/project';
-import {babelPrepass} from './babel-prepass';
+import {babelPrepass, mayNeedPrepass} from './babel-prepass';
 
 export const JSX_UNWRAP_SOURCE = 'virtual:kotlin-react-compiler/unwrap';
 export const JSX_UNWRAP_RUNTIME = `${JSX_UNWRAP_SOURCE}/jsx-runtime`;
@@ -11,6 +11,7 @@ export { unwrap as jsx, unwrap as jsxs };
 
 const ARGUMENT_ATTRIBUTES = ['a0', 'a1', 'a2'];
 const REACT_JSX_FUNCTIONS = new Set(['jsx', 'jsxs']);
+const INIT_PROPERTIES_MEMO_DIRECTIVES = /(\{)(\r?\n[ \t]*_init_properties_[\w$]+\(\);[ \t]*\r?\n)((?:[ \t]*(?:"use (?:no )?memo"|'use (?:no )?memo');?[ \t]*(?:\r?\n|$))+)/g;
 
 const DIAGNOSTIC_CATEGORIES: Record<string, string> = {
     'Existing memoization could not be preserved': 'PreserveManualMemo',
@@ -134,11 +135,24 @@ function oxcPrepass(compilationMode: CompilationMode, incompatibleHooks: Record<
     });
 }
 
+function hoistDirectivesAboveInitProperties(code: string): string {
+    return code.replace(INIT_PROPERTIES_MEMO_DIRECTIVES, (_match: string, opening: string, initialization: string, displaced: string) => {
+        const directives = [...displaced.matchAll(/(["'])use (?:no )?memo\1/g)].map(([directive]) => `${directive};`).join(' ');
+        return `${opening}${directives}${initialization}${displaced.replace(/[^\r\n]/g, ' ')}`;
+    });
+}
+
 export function prepareKotlinMjsForOxc(
     code: string,
     filename: string,
     { compilationMode = DEFAULT_COMPILATION_MODE, incompatibleHooks = {} }: ReactCompilerOptions = {},
 ): PreparedModule {
+    const hoisted = hoistDirectivesAboveInitProperties(code);
+    const hasJsxRuntimeImport = code.includes('react/jsx-runtime') || code.includes(KOTLIN_JSX_RUNTIME);
+    const hasIncompatibleHookSource = Object.keys(incompatibleHooks).some((source) => code.includes(source));
+    if (!mayNeedPrepass(hoisted) && !hasJsxRuntimeImport && !hasIncompatibleHookSource) {
+        return { code: hoisted, map: null, events: [] };
+    }
     const babel = projectRequire('@babel/core');
     const events: ReactCompilerEvent[] = [];
     const result = babel.transformSync(code, {
