@@ -117,6 +117,17 @@ export { useHandler as useHandler1a2b3c };`);
         assert.equal(events[0].fnLoc.start.line, 4);
     });
 
+    test('locate a diagnostic after non-ASCII text, which oxc reports in UTF-8 bytes', () => {
+        const { events } = compile(`var arrows = '←→↑↓ ✈';
+import { useCallback as useCallback } from 'react';
+const useHandler = (props) => {
+  'use memo';
+  return useCallback(() => props.onClick(props.id), [props.id]);
+};
+export { useHandler as useHandler1a2b3c };`);
+        assert.deepEqual(events.map((e) => e.fnLoc.start.line), [5]);
+    });
+
     test('hoist a memo directive above Kotlin property initialization without running Babel', () => {
         const code = `function App(props) {
   _init_properties_App_kt();

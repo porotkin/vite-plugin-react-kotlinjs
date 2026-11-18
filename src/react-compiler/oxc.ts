@@ -176,18 +176,29 @@ function lineOf(code: string, offset: number) {
     return line;
 }
 
-function diagnosticEvent(code: string, error: { message: string; labels: Array<{ start: number }>; helpMessage: string | null }): ReactCompilerEvent {
-    const [reason] = error.message.split('\n');
-    const start = error.labels[0]?.start;
-    return {
-        kind: 'CompileError',
-        fnLoc: start === undefined ? null : { start: { line: lineOf(code, start) } },
-        detail: {
-            category: DIAGNOSTIC_CATEGORIES[reason] ?? 'Unknown',
-            reason,
-            description: error.helpMessage,
-        },
-    };
+interface OxcDiagnostic {
+    message: string;
+    labels: Array<{ start: number }>;
+    helpMessage: string | null;
+}
+
+/** oxc reports UTF-8 byte offsets. */
+function diagnosticEvents(code: string, diagnostics: OxcDiagnostic[]): ReactCompilerEvent[] {
+    if (diagnostics.length === 0) return [];
+    const bytes = Buffer.from(code);
+    return diagnostics.map(({ message, labels, helpMessage }) => {
+        const [reason] = message.split('\n');
+        const offset = labels.length === 0 ? undefined : bytes.subarray(0, labels[0].start).toString().length;
+        return {
+            kind: 'CompileError',
+            fnLoc: offset === undefined ? null : { start: { line: lineOf(code, offset) } },
+            detail: {
+                category: DIAGNOSTIC_CATEGORIES[reason] ?? 'Unknown',
+                reason,
+                description: helpMessage,
+            },
+        };
+    });
 }
 
 export function compilePreparedKotlinMjsWithOxc(
@@ -215,7 +226,7 @@ export function compilePreparedKotlinMjsWithOxc(
         },
     });
     if (result.fatal) throw new Error(`[vite-plugin-react-kotlinjs] ${filename}: ${result.errors.map((e: { message: string }) => e.message).join('\n')}`);
-    const events: ReactCompilerEvent[] = result.errors.map((error: any) => diagnosticEvent(prepared, error));
+    const events = diagnosticEvents(prepared, result.errors);
     return { code: result.code as string, map: (result.map ?? null) as object | null, events };
 }
 
