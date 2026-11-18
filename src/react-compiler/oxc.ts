@@ -1,4 +1,5 @@
 import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type CompilationMode, type ReactCompilerEvent, type ReactCompilerOptions} from '../options';
+import {parseAst} from 'vite';
 import {projectRequire} from '../shared/project';
 import {babelPrepass, mayNeedPrepass} from './babel-prepass';
 
@@ -170,32 +171,56 @@ export function prepareKotlinMjsForOxc(
 
 let oxc: { transformSync: (filename: string, code: string, options: object) => any } | undefined;
 
-function lineOf(code: string, offset: number) {
-    let line = 1;
-    for (let i = code.indexOf('\n'); i !== -1 && i < offset; i = code.indexOf('\n', i + 1)) line++;
-    return line;
-}
-
 interface OxcDiagnostic {
     message: string;
     labels: Array<{ start: number }>;
     helpMessage: string | null;
 }
 
-/** oxc reports UTF-8 byte offsets. */
+interface SourceFunction {
+    name: string | null;
+    start: number;
+    end: number;
+}
+
+const FUNCTION_TYPES = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
+
+function position(code: string, offset: number) {
+    const lines = code.slice(0, offset).split('\n');
+    return { line: lines.length, column: lines[lines.length - 1].length };
+}
+
+/** The outermost function around `offset`, which is the one React Compiler compiles or leaves as it is. */
+function functionAround(node: any, offset: number, name: string | null = null): SourceFunction | undefined {
+    if (FUNCTION_TYPES.has(node.type)) return { name: node.id?.name ?? name, start: node.start, end: node.end };
+    const childName = node.type === 'VariableDeclarator' && node.id.type === 'Identifier' ? node.id.name : name;
+    for (const value of Object.values(node)) {
+        for (const child of Array.isArray(value) ? value : [value]) {
+            if (typeof child?.type !== 'string' || offset < child.start || offset >= child.end) continue;
+            return functionAround(child, offset, childName);
+        }
+    }
+    return undefined;
+}
+
+/** oxc reports UTF-8 byte offsets; `labels[0]` points into the function the diagnostic is about. */
 function diagnosticEvents(code: string, diagnostics: OxcDiagnostic[]): ReactCompilerEvent[] {
     if (diagnostics.length === 0) return [];
     const bytes = Buffer.from(code);
+    const program = parseAst(code, { lang: 'jsx' });
     return diagnostics.map(({ message, labels, helpMessage }) => {
         const [reason] = message.split('\n');
         const offset = labels.length === 0 ? undefined : bytes.subarray(0, labels[0].start).toString().length;
+        const fn = offset === undefined ? undefined : functionAround(program, offset);
         return {
             kind: 'CompileError',
-            fnLoc: offset === undefined ? null : { start: { line: lineOf(code, offset) } },
+            fnName: fn?.name ?? null,
+            fnLoc: fn ? { start: position(code, fn.start), end: position(code, fn.end) } : null,
             detail: {
                 category: DIAGNOSTIC_CATEGORIES[reason] ?? 'Unknown',
                 reason,
                 description: helpMessage,
+                loc: offset === undefined ? null : { start: position(code, offset) },
             },
         };
     });

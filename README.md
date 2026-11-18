@@ -92,7 +92,7 @@ React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 
 - **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again.
 - **`incompatibleHooks`:** a function calling a listed hook is opted out with `"use no memo"` and reported as an `IncompatibleLibrary` `CompileError`.
-- **`logger`:** receives the compiler's diagnostics as `CompileError` events, with `detail.category` derived from the reason (`PreserveManualMemo`, `IncompatibleLibrary`, otherwise `Unknown`). There are no `CompileSuccess` events.
+- **`logger`:** receives each diagnostic as a `CompileError` event naming the function it leaves uncompiled (`fnName`, `fnLoc`), with the diagnostic's own `detail.loc`, and `detail.category` derived from the reason (`PreserveManualMemo`, `IncompatibleLibrary`, otherwise `Unknown`). There are no `CompileSuccess` events.
 - **Not typed:** kotlin-react-compiler's `mutableValue()`.
 - **Off:** `validateExhaustiveMemoizationDependencies` and `validateExhaustiveEffectDependencies`, which `babel-plugin-react-compiler` 1.0 doesn't have either.
 

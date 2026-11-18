@@ -113,8 +113,9 @@ function useHandler(props) {
   return useCallback(() => props.onClick(props.id), [props.id]);
 }
 export { useHandler as useHandler1a2b3c };`);
-        assert.deepEqual(events.map((e) => [e.kind, e.detail.category]), [['CompileError', 'PreserveManualMemo']]);
-        assert.equal(events[0].fnLoc.start.line, 4);
+        assert.deepEqual(events.map((e) => [e.kind, e.fnName, e.detail.category]), [['CompileError', 'useHandler', 'PreserveManualMemo']]);
+        assert.deepEqual([events[0].fnLoc.start, events[0].fnLoc.end], [{ line: 2, column: 0 }, { line: 5, column: 1 }]);
+        assert.equal(events[0].detail.loc.start.line, 4);
     });
 
     test('locate a diagnostic after non-ASCII text, which oxc reports in UTF-8 bytes', () => {
@@ -125,7 +126,7 @@ const useHandler = (props) => {
   return useCallback(() => props.onClick(props.id), [props.id]);
 };
 export { useHandler as useHandler1a2b3c };`);
-        assert.deepEqual(events.map((e) => e.fnLoc.start.line), [5]);
+        assert.deepEqual(events.map((e) => [e.fnName, e.fnLoc.start.line, e.detail.loc.start.line]), [['useHandler', 3, 5]]);
     });
 
     test('hoist a memo directive above Kotlin property initialization without running Babel', () => {
