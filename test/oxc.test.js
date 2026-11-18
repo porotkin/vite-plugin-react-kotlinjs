@@ -36,7 +36,7 @@ function App(props) {
 export { App as App1a2b3c };`;
 
 describe('oxc backend', () => {
-    test('memoize Kotlin jsx() calls as JSX elements and call them unchanged at runtime', () => {
+    test('memoize Kotlin jsx() calls as JSX elements and call them with the same arguments at runtime', () => {
         const { compiled, compiler } = compile(component);
         assert.match(compiled.code, /react\/compiler-runtime/);
         assert.match(compiled.code, /virtual:kotlin-react-compiler\/unwrap\/jsx-runtime/);
@@ -55,8 +55,8 @@ describe('oxc backend', () => {
 
         const first = App({ title: 'a' });
         assert.deepEqual(calls, [
-            ['react', 'span', { children: 'a' }],
-            ['kotlin', 'div', { children: { react: ['span', { children: 'a' }] } }, 'key'],
+            ['react', 'span', { children: 'a' }, undefined],
+            ['kotlin', 'div', { children: { react: ['span', { children: 'a' }, undefined] } }, 'key'],
         ]);
         assert.equal(App({ title: 'a' }), first);
         assert.equal(calls.length, 2);
