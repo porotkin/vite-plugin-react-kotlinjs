@@ -172,6 +172,7 @@ export function prepareKotlinMjsForOxc(
 let oxc: { transformSync: (filename: string, code: string, options: object) => any } | undefined;
 
 interface OxcDiagnostic {
+    severity: 'Error' | 'Warning' | 'Advice';
     message: string;
     labels: Array<{ start: number }>;
     helpMessage: string | null;
@@ -203,12 +204,15 @@ function functionAround(node: any, offset: number, name: string | null = null): 
     return undefined;
 }
 
-/** oxc reports UTF-8 byte offsets; `labels[0]` points into the function the diagnostic is about. */
+/**
+ * Every diagnostic leaves its function uncompiled, whatever its severity: oxc reports an incompatible library as a
+ * warning. oxc reports UTF-8 byte offsets; `labels[0]` points into the function the diagnostic is about.
+ */
 function diagnosticEvents(code: string, diagnostics: OxcDiagnostic[]): ReactCompilerEvent[] {
     if (diagnostics.length === 0) return [];
     const bytes = Buffer.from(code);
     const program = parseAst(code, { lang: 'jsx' });
-    return diagnostics.map(({ message, labels, helpMessage }) => {
+    return diagnostics.map(({ severity, message, labels, helpMessage }) => {
         const [reason] = message.split('\n');
         const offset = labels.length === 0 ? undefined : bytes.subarray(0, labels[0].start).toString().length;
         const fn = offset === undefined ? undefined : functionAround(program, offset);
@@ -218,6 +222,7 @@ function diagnosticEvents(code: string, diagnostics: OxcDiagnostic[]): ReactComp
             fnLoc: fn ? { start: position(code, fn.start), end: position(code, fn.end) } : null,
             detail: {
                 category: DIAGNOSTIC_CATEGORIES[reason] ?? 'Unknown',
+                severity,
                 reason,
                 description: helpMessage,
                 loc: offset === undefined ? null : { start: position(code, offset) },
