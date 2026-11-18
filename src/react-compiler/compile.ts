@@ -42,6 +42,11 @@ const KRC_MUTABLE_VALUE_MODULES = ['/com/github/porotkin/reactcompiler/MutableVa
  * Kotlin/JS calls `jsx()` / `jsxs()` directly, so the compiler is told they freeze props and return frozen values;
  * kotlin-react-compiler's `mutableValue()` is typed as returning a value React does not own.
  */
+/** Whether the module calls kotlin-react-compiler's `mutableValue()`, whose type only `babel-plugin-react-compiler` takes. */
+export function importsKrcMutableValue(code: string) {
+    return KRC_MUTABLE_VALUE_MODULES.some((suffix) => code.includes(suffix));
+}
+
 export function moduleTypeProvider(moduleName: string) {
     if (moduleName === 'react/jsx-runtime') return reactJsxRuntime;
     if (moduleName.endsWith(KOTLIN_JSX_RUNTIME)) return kotlinJsxRuntime;

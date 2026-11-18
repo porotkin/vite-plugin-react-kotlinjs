@@ -1,6 +1,6 @@
 import type { ResolvedOptions } from '../options';
 import { createTransformPlugin } from '../shared/plugin';
-import { compileKotlinMjs } from './compile';
+import { compileKotlinMjs, importsKrcMutableValue } from './compile';
 import { compilePreparedKotlinMjsWithOxc, jsxUnwrapRuntime, prepareKotlinMjsForOxc } from './oxc';
 
 const USE_MEMO_DIRECTIVE = /["']use memo["']/;
@@ -36,7 +36,10 @@ function babelReactCompilerPlugin(options: ResolvedOptions) {
     });
 }
 
-/** Two transforms, so Vite chains the source maps of the Babel prepass and of oxc. */
+/**
+ * Two transforms, so Vite chains the source maps of the Babel prepass and of oxc. A module calling `mutableValue()` is
+ * compiled by Babel in the first one: oxc takes no module types, and untyped, a write through it during render compiles.
+ */
 function oxcReactCompilerPlugins(options: ResolvedOptions) {
     const { codeInclude, selected } = selectsModule(options);
     const prepass = createTransformPlugin({
@@ -45,6 +48,10 @@ function oxcReactCompilerPlugins(options: ResolvedOptions) {
         codeInclude,
         transform(code, id) {
             if (!selected(code)) return undefined;
+            if (importsKrcMutableValue(code)) {
+                const { code: compiled, map } = compileKotlinMjs(code, id, options);
+                return { code: compiled, map };
+            }
             const { code: rewritten, map, events } = prepareKotlinMjsForOxc(code, id, options);
             for (const event of events) options.logger?.logEvent(id, event);
             return { code: `${rewritten}${OXC_PREPARED_SUFFIX}`, map };

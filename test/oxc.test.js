@@ -129,6 +129,28 @@ export { useHandler as useHandler1a2b3c };`);
         assert.deepEqual(events.map((e) => [e.fnName, e.fnLoc.start.line, e.detail.loc.start.line]), [['useHandler', 3, 5]]);
     });
 
+    test("compile a module calling mutableValue() with Babel, which rejects a write through it during render", () => {
+        const mutableValueImport = "import { mutableValue1a2b3c as mutableValue } from '../krc/com/github/porotkin/reactcompiler/MutableValue.mjs';";
+        const { prepared: duringRender, events } = compile(`${mutableValueImport}
+function useCanary(target) {
+  'use memo';
+  var write = () => { mutableValue(target).hidden = true; };
+  write();
+}
+export { useCanary };`);
+        assert.doesNotMatch(duringRender.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__|react\/compiler-runtime/);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
+
+        const { prepared: inEffect } = compile(`${mutableValueImport}
+import { useEffect as useEffect } from 'react';
+function useHide(target) {
+  'use memo';
+  useEffect(() => { mutableValue(target).hidden = true; }, [target]);
+}
+export { useHide };`);
+        assert.match(inEffect.code, /react\/compiler-runtime/);
+    });
+
     test('hoist a memo directive above Kotlin property initialization without running Babel', () => {
         const code = `function App(props) {
   _init_properties_App_kt();
