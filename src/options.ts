@@ -52,17 +52,9 @@ const defaultGetComponentName = (code: string) => /export {[^}]*get_([\w$]+) as 
 
 export type ResolvedOptions = ReturnType<typeof resolveOptions>;
 
-const COMPILER_OPTIONS = ['compilationMode', 'preserveExistingMemoizationGuarantees', 'incompatibleHooks', 'logger'];
-
 /** `reactCompiler: false` disables the compiler; an object configures it. */
 export function resolveOptions(options: Options) {
     const compiler = typeof options.reactCompiler === 'object' ? options.reactCompiler : {};
-    // Fail a config still using the 2.x locations instead of silently ignoring it (a throwing `logger`, for one).
-    const moved = [
-        ...COMPILER_OPTIONS.filter((key) => key in options).map((key) => `\`${key}\` is now \`reactCompiler.${key}\``),
-        ...('include' in compiler ? ['`reactCompiler.include` is now the top-level `include`'] : []),
-    ];
-    if (moved.length > 0) throw new Error(`[vite-plugin-react-kotlinjs] ${moved.join('; ')}`);
     return {
         ...compiler,
         reactCompiler: options.reactCompiler !== false,
