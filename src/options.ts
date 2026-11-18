@@ -8,7 +8,14 @@ export interface ReactCompilerEvent {
     [key: string]: unknown;
 }
 
+export type ReactCompilerBackend = 'babel' | 'oxc';
+
 export interface ReactCompilerOptions {
+    /**
+     * `babel` runs `babel-plugin-react-compiler`. `oxc` runs the experimental Rust port from `oxc-transform-react`,
+     * several times faster, with Kotlin's `jsx()` calls passed to it as JSX elements instead of through a type provider.
+     */
+    backend?: ReactCompilerBackend;
     compilationMode?: CompilationMode;
     /**
      * Whether to enforce and preserve manual `useMemo` / `useCallback` memoization guarantees.
@@ -59,6 +66,7 @@ export function resolveOptions(options: Options) {
     return {
         ...compiler,
         reactCompiler: options.reactCompiler !== false,
+        backend: compiler.backend ?? 'babel',
         compilationMode: compiler.compilationMode ?? DEFAULT_COMPILATION_MODE,
         include: options.include ?? DEFAULT_INCLUDE,
         isReactFC: options.isReactFC ?? defaultIsReactFC,

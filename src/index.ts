@@ -2,7 +2,7 @@ import {fastRefreshPlugin} from './fast-refresh/plugin';
 import {type Options, type ReactCompilerOptions, resolveOptions} from './options';
 import {reactCompilerPlugin} from './react-compiler/plugin';
 
-export type { CompilationMode, Options, ReactCompilerEvent, ReactCompilerOptions } from './options';
+export type { CompilationMode, Options, ReactCompilerBackend, ReactCompilerEvent, ReactCompilerOptions } from './options';
 export { compileKotlinMjs, moduleTypeProvider } from './react-compiler/compile';
 export type { CompileKotlinMjsResult } from './react-compiler/compile';
 
@@ -11,7 +11,7 @@ export default function reactKotlinJs(options: Options = {}) {
     // Fast Refresh goes first: `isReactFC` / `getComponentName` match Kotlin/JS output, which the compiler reprints.
     return [
         fastRefreshPlugin(resolved),
-        ...(resolved.reactCompiler ? [reactCompilerPlugin(resolved)] : []),
+        ...(resolved.reactCompiler ? reactCompilerPlugin(resolved) : []),
     ];
 }
 
