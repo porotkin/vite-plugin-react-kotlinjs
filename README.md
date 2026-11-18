@@ -83,6 +83,19 @@ code without it, so a hook that promises a stable identity, an event callback fo
 
 React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 
+### `reactCompiler.backend`
+
+- **Type:** `'babel' | 'oxc'`
+- **Default:** `'babel'`
+
+`'oxc'` compiles with the experimental Rust port of React Compiler from `oxc-transform-react` (install it next to the plugin), which is several times faster than `babel-plugin-react-compiler`. The Babel pre-pass still runs first. The native binding takes no callbacks, so the plugin works around them:
+
+- **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again.
+- **`incompatibleHooks`:** a function calling a listed hook is opted out with `"use no memo"` and reported as an `IncompatibleLibrary` `CompileError`.
+- **`logger`:** receives the compiler's diagnostics as `CompileError` events, with `detail.category` derived from the reason (`PreserveManualMemo`, `IncompatibleLibrary`, otherwise `Unknown`). There are no `CompileSuccess` events.
+- **Not typed:** kotlin-react-compiler's `mutableValue()`.
+- **Off:** `validateExhaustiveMemoizationDependencies` and `validateExhaustiveEffectDependencies`, which `babel-plugin-react-compiler` 1.0 doesn't have either.
+
 ### `reactCompiler.preserveExistingMemoizationGuarantees`
 
 - **Type:** `boolean`
