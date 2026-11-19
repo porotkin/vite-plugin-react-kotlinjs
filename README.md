@@ -88,7 +88,7 @@ React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 - **Type:** `'babel' | 'oxc'`
 - **Default:** `'babel'`
 
-`'oxc'` compiles with the experimental Rust port of React Compiler from `oxc-transform-react` (install it next to the plugin), which is several times faster than `babel-plugin-react-compiler`. The Babel pre-pass still runs first. The native binding takes no callbacks, so the plugin works around them:
+`'oxc'` compiles with the experimental Rust port of React Compiler from `oxc-transform-react` (install it next to the plugin), which is several times faster than `babel-plugin-react-compiler`. In `annotation` mode the pre-pass runs as text edits on oxc's own AST, without Babel, whose parse, scope crawls and code generation cost more than the compiler; a module it doesn't cover (a `var` that has to move, BigInt, a class, a pattern) goes through the Babel pre-pass. The native binding takes no callbacks, so the plugin works around them:
 
 - **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call inside a compiled function into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`, `Jsx` being a second import of the same function), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again. Calls elsewhere stay as they are.
 - **`incompatibleHooks`:** a function calling a listed hook is opted out with `"use no memo"` and reported as an `IncompatibleLibrary` `CompileError`.

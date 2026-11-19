@@ -3,6 +3,7 @@ import {type CompileOptions, DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type 
 import {parseAst} from 'vite';
 import {projectRequire} from '../shared/project';
 import {mayNeedPrepass, prepass} from './babel-prepass';
+import {lightPrepass} from './light-prepass';
 import {compileKotlinMjs, type CompileKotlinMjsResult, importsKrcMutableValue, withMemoDirectives} from './compile';
 
 export const JSX_UNWRAP_SOURCE = 'virtual:kotlin-react-compiler/unwrap';
@@ -273,7 +274,14 @@ let remapping: ((maps: object[], loader: () => null) => object) | undefined;
 export function compileKotlinMjsWithOxc(source: string, filename: string, options: CompileOptions = {}): CompileKotlinMjsResult {
     if (importsKrcMutableValue(source)) return compileKotlinMjs(source, filename, options);
     const code = withMemoDirectives(source);
-    const prepared = prepareKotlinMjsForOxc(code, filename, options);
+    return compilePrepared(lightlyPrepared(code, filename, options) ?? prepareKotlinMjsForOxc(code, filename, options), filename, options);
+}
+
+function lightlyPrepared(code: string, filename: string, { compilationMode = DEFAULT_COMPILATION_MODE, incompatibleHooks = {}, sourceMaps = true }: CompileOptions) {
+    return compilationMode === 'annotation' ? lightPrepass(code, filename, incompatibleHooks, sourceMaps) : undefined;
+}
+
+function compilePrepared(prepared: PreparedModule, filename: string, options: CompileOptions): CompileKotlinMjsResult {
     const compiled = compilePreparedKotlinMjsWithOxc(prepared.code, filename, options);
     let map = compiled.map;
     if (map && prepared.map) {
