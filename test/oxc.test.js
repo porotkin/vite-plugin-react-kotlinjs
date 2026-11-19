@@ -213,6 +213,30 @@ export { useRows };`, {
         assert.doesNotMatch(compiled.code, /__krcUseMemo/);
     });
 
+    test('reuse the result for unchanged code from the cache, with its events', async () => {
+        const config = { command: 'serve', cacheDir: tempDir(), build: { sourcemap: false } };
+        const module = `import { useCallback as useCallback } from 'react';
+function useHandler(props) {
+  'use memo';
+  return useCallback(() => props.onClick(props.id), [props.id]);
+}
+export { useHandler };`;
+        const first = await compile(module, {}, config);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const root = path.join(config.cacheDir, 'vite-plugin-react-kotlinjs');
+        const [entry] = fs.readdirSync(root, { recursive: true }).filter((f) => f.endsWith('.json')).map((f) => path.join(root, f));
+        const stored = JSON.parse(fs.readFileSync(entry, 'utf8'));
+        stored.result.code = `/* from the cache */\n${stored.result.code}`;
+        fs.writeFileSync(entry, JSON.stringify(stored));
+
+        const second = await compile(module, {}, config);
+        assert.equal(second.compiled.code, `/* from the cache */\n${first.compiled.code}`);
+        assert.deepEqual(second.events, first.events);
+
+        const changed = await compile(module.replace('props.id', 'props.key'), {}, config);
+        assert.match(changed.compiled.code, /props\.key/);
+    });
+
     test('skip modules without "use memo" in annotation mode', async () => {
         const { compiled } = await compile(`import { jsx as jsx } from 'react/jsx-runtime';
 function App() {
