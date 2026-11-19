@@ -3,7 +3,7 @@ import {type CompileOptions, DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type 
 import {parseAst} from '../shared/parse-ast';
 import {projectRequire} from '../shared/project';
 import {mayNeedPrepass, prepass} from './babel-prepass';
-import {lightPrepass} from './light-prepass';
+import {forEachChild, lightPrepass} from './light-prepass';
 import {compileKotlinMjs, type CompileKotlinMjsResult, importsKrcMutableValue, withMemoDirectives} from './compile';
 
 export const JSX_UNWRAP_SOURCE = 'virtual:kotlin-react-compiler/unwrap';
@@ -276,7 +276,8 @@ let remapping: ((maps: object[], loader: () => null) => object) | undefined;
 export function compileKotlinMjsWithOxc(source: string, filename: string, options: CompileOptions = {}): CompileKotlinMjsResult {
     if (importsKrcMutableValue(source)) return compileKotlinMjs(source, filename, options);
     const code = withMemoDirectives(source);
-    return compilePrepared(lightlyPrepared(code, filename, options) ?? prepareKotlinMjsForOxc(code, filename, options), filename, options);
+    return compilePrepared(lightlyPrepared(code, filename, options) ?? prepareKotlinMjsForOxc(code, filename, options), filename, options)
+        ?? compileKotlinMjs(source, filename, options);
 }
 
 /**
@@ -294,12 +295,38 @@ function lightlyPrepared(code: string, filename: string, { compilationMode = DEF
     return compilationMode === 'annotation' ? lightPrepass(code, filename, incompatibleHooks, sourceMaps) : undefined;
 }
 
-function compilePrepared(prepared: PreparedModule, filename: string, options: CompileOptions): CompileKotlinMjsResult {
+function compilePrepared(prepared: PreparedModule, filename: string, options: CompileOptions): CompileKotlinMjsResult | undefined {
     const compiled = compilePreparedKotlinMjsWithOxc(prepared.code, filename, options);
+    if (prepared.code.includes('useMemo(') && readsDependencyDeclaredInside(compiled.code)) return undefined;
     let map = compiled.map;
     if (map && prepared.map) {
         remapping ??= createRequire(projectRequire.resolve('@babel/core'))('@jridgewell/remapping');
         map = { ...remapping!([map, prepared.map], () => null) };
     }
     return { code: compiled.code, map, events: [...prepared.events, ...compiled.events] };
+}
+
+function readsDependencyDeclaredInside(code: string): boolean {
+    let found = false;
+    const visit = (node: any) => {
+        if (found) return;
+        if (node.type === 'IfStatement' && node.consequent.type === 'BlockStatement') {
+            const declared = new Set<string>(node.consequent.body.flatMap((statement: any) =>
+                statement.type === 'VariableDeclaration' ? statement.declarations.map((declarator: any) => declarator.id.name) : []));
+            found = reads(node.test, declared);
+        }
+        forEachChild(node, visit);
+    };
+    visit(parseAst(code));
+    return found;
+}
+
+function reads(node: any, names: Set<string>): boolean {
+    if (node.type === 'Identifier') return names.has(node.name);
+    if (node.type === 'MemberExpression' && !node.computed) return reads(node.object, names);
+    let found = false;
+    forEachChild(node, (child) => {
+        found ||= reads(child, names);
+    });
+    return found;
 }

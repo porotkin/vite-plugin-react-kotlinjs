@@ -82,7 +82,7 @@ interface Import {
     specifier: any;
 }
 
-function forEachChild(node: any, visit: (child: any, key: string) => void) {
+export function forEachChild(node: any, visit: (child: any, key: string) => void) {
     for (const key in node) {
         if (key === 'type' || key === 'start' || key === 'end') continue;
         const value = node[key];

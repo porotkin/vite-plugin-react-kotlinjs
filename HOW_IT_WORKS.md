@@ -179,6 +179,10 @@ The native binding takes no callbacks, so the plugin works around them:
   incompatible library, as warnings, so the severity doesn't tell whether the function compiled.
 - **`mutableValue()`:** a module calling it is compiled with `babel-plugin-react-compiler`, since only its
   `moduleTypeProvider` types the value so that a write through it is still rejected during render.
+- **Miscompiled `useMemo`:** `oxc-transform-react` 0.158 compiles a `useMemo` callback that constructs a class it
+  computes there, such as Kotlin's `new (PointD())(x * 0.5 + 2)`, into a memo block that checks a value it only declares
+  inside: `if ($[0] !== t1) { const t1 = x * 0.5 + 2; … }`, which throws when rendered. A module calling `useMemo` whose
+  output has such a block is compiled with `babel-plugin-react-compiler` instead.
 - **Off:** `validateExhaustiveMemoizationDependencies` and `validateExhaustiveEffectDependencies`, which
   `babel-plugin-react-compiler` 1.0 doesn't have either.
 

@@ -163,6 +163,24 @@ export { useHide };`);
         assert.match(inEffect.code, /react\/compiler-runtime/);
     });
 
+    test('compile with Babel a useMemo constructing a Kotlin class, which oxc reads before declaring its argument', async () => {
+        const { compiled } = await compile(`import { useMemo as useMemo } from 'react';
+import { PointD1a2b3c as PointD } from './Geometry.mjs';
+function usePoint(element) {
+  'use memo';
+  return useMemo(() => new (PointD())(element.offsetWidth * 0.5 + 2, 4.0), [element]);
+}
+export { usePoint };`);
+        assert.match(compiled.code, /react\/compiler-runtime/);
+        const usePoint = evaluate(compiled.code, {
+            'react/compiler-runtime': { c: (size) => Array(size).fill(Symbol.for('react.memo_cache_sentinel')) },
+            react: {},
+            './Geometry.mjs': { PointD1a2b3c: () => class { constructor(x, y) { this.x = x; this.y = y; } } },
+        }, 'usePoint');
+
+        assert.deepEqual({ ...usePoint({ offsetWidth: 10 }) }, { x: 7, y: 4 });
+    });
+
     test('hoist a memo directive above Kotlin property initialization without running Babel', async () => {
         const { compiled, events } = await compile(`import { jsx as jsx } from 'react/jsx-runtime';
 function App(props) {

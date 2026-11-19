@@ -105,8 +105,9 @@ reactKotlinJs({
 `oxc-transform-react` next to the plugin. Differences from `'babel'`:
 
 - the logger only receives `CompileError` events, and their `severity` doesn't tell whether the function compiled
-- modules calling kotlin-react-compiler's `mutableValue()` still compile with Babel, so `babel-plugin-react-compiler`
-  is needed for them
+- modules calling kotlin-react-compiler's `mutableValue()`, and modules oxc miscompiles (a `useMemo` constructing a
+  class read before its arguments are declared), still compile with Babel, so `babel-plugin-react-compiler` is needed
+  for them
 - exhaustive dependency validation is off, as in `babel-plugin-react-compiler` 1.0
 
 ### Good to know
