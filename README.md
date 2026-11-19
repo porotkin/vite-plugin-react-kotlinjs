@@ -1,19 +1,30 @@
 # Vite Plugin React KotlinJS
 
-A Vite plugin that enables Fast Refresh and React Compiler support for Kotlin/JS React applications by pre/post-processing generated `.mjs` files.
+Fast Refresh and [React Compiler](https://react.dev/learn/react-compiler) for Kotlin/JS React apps built with Vite.
+
+## Requirements
+
+- Vite 8
+- Kotlin/JS with ES modules (`useEsModules()`) and one module per Kotlin file, in `gradle.properties`:
+  ```properties
+  kotlin.js.ir.output.granularity=per-file
+  ```
+- For React Compiler: the [kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin,
+  1.0.7 or newer
+- Components must return a React node
 
 ## Installation
 
-Add the following dependency to your `build.gradle.kts`:
+In `build.gradle.kts` (any source set works, e.g. `webMainImplementation`):
+
 ```kotlin
 dependencies {
   jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^2.1.1"))
 }
 ```
 
-> Source set can be changed to suit your needs (e.g. `webMainImplementation` instead)
+For React Compiler, also add Babel and the compiler:
 
-For React Compiler support, also add `@babel/core` and `babel-plugin-react-compiler`:
 ```kotlin
 dependencies {
     jsMainImplementation(devNpm("@babel/core", "latest"))
@@ -21,104 +32,58 @@ dependencies {
 }
 ```
 
-React Compiler support needs the Kotlin side prepared by the
-[kotlin-react-compiler](https://github.com/porotkin/kotlin-react-compiler) Gradle plugin, version 1.0.7 or newer: it
-lowers `kotlin-react` components and hooks into shapes the compiler understands, emits hook callbacks inline, and
-lowers callable references, ref and state delegates and effect returns in IR. This plugin only rewrites what is left
-of Kotlin/JS code generation.
-
-The project needs ES modules (`useEsModules()`). Fast Refresh treats a module as one component, so it also needs one
-`.mjs` module per Kotlin file: `kotlin.js.ir.output.granularity=per-file` in `gradle.properties`, the layout the plugin
-is tested with.
-
 ## Usage
 
-Add the plugin (it returns both plugins: Fast Refresh, then React Compiler) and the official Vite React plugin to your `vite.config.js`:
+In `vite.config.js`, add the plugin before the official React plugin:
+
 ```javascript
 import reactKotlinJs from '@porotkin/vite-plugin-react-kotlinjs'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig(() => {
-    return {
-        plugins: [
-            reactKotlinJs({
-                reactCompiler: {
-                    compilationMode: 'annotation',
-                },
-            }),
-            react(),
-        ],
-    }
+export default defineConfig({
+  plugins: [
+    reactKotlinJs(),
+    react(),
+  ],
 })
 ```
 
-You can also use the standalone React Compiler pre-plugin or helper functions directly:
-```javascript
-import {
-    kotlinReactCompilerVitePlugin,
-    compileKotlinMjs,
-    moduleTypeProvider,
-} from '@porotkin/vite-plugin-react-kotlinjs'
-```
+Also exported: `kotlinReactCompilerVitePlugin()` (React Compiler without Fast Refresh), `compileKotlinMjs()` and
+`moduleTypeProvider`.
 
 ## Options
 
-The plugin accepts the following options:
+| Option             | Type                                    | Default      | Description                                                                                                        |
+|--------------------|-----------------------------------------|--------------|--------------------------------------------------------------------------------------------------------------------|
+| `reactCompiler`    | `boolean \| ReactCompilerOptions`       | `true`       | Enables, disables or [configures](#react-compiler-options) React Compiler.                                         |
+| `include`          | `Array<string \| RegExp>`               | `[/\.mjs$/]` | Module IDs to transform. `node_modules` is always skipped.                                                         |
+| `isReactFC`        | `(code: string) => boolean`             | React import | Detects React modules. Unless `compilationMode` is `'annotation'`, also picks the modules React Compiler compiles. |
+| `getComponentName` | `(code: string) => string \| undefined` |              | Extracts the component name, if your Kotlin/JS output uses different patterns.                                     |
+| `debug`            | `boolean`                               | `false`      | Logs the transformed files.                                                                                        |
 
-### `reactCompiler`
+### React Compiler options
 
-- **Type:** `boolean | ReactCompilerOptions`
-- **Default:** `true`
+| Option                                  | Type                                           | Default        | Description                                                                                                                              |
+|-----------------------------------------|------------------------------------------------|----------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `compilationMode`                       | `'annotation' \| 'infer' \| 'syntax' \| 'all'` | `'annotation'` | Which functions get compiled. `'annotation'` means only those marked `"use memo"`.                                                       |
+| `backend`                               | `'babel' \| 'oxc'`                             | `'babel'`      | [Compiler implementation](#oxc-backend).                                                                                                 |
+| `preserveExistingMemoizationGuarantees` | `boolean`                                      | `true`         | [Keeps `useMemo` / `useCallback` results stable](#preserving-memoization).                                                               |
+| `incompatibleHooks`                     | `Record<string, string[]>`                     | `{}`           | Hooks by module, e.g. `{ 'react-use-measure': ['useMeasure'] }`, whose callers stay uncompiled, on top of the ones React Compiler knows. |
+| `logger`                                | `{ logEvent(filename, event) }`                |                | [Receives compiler events](#reporting-uncompiled-functions).                                                                             |
 
-Enable/disable or configure the React Compiler pre-transform with the `reactCompiler.*` options below.
+#### Preserving memoization
 
-The compiler runs only in the Vite build. Kotlin/JS browser tests (`jsBrowserTest`: Karma with webpack) run the same
-code without it, so a hook that promises a stable identity, an event callback for example, keeps its own `useMemo` or
-`useCallback`.
+With `true`, a `useMemo` / `useCallback` result keeps its identity, and a function whose memoization the compiler
+can't preserve is left uncompiled. With `false`, more functions compile, but the compiler may recompute a memoized
+value on every render, so effect dependencies or options passed to libraries such as TanStack Table can change each
+render and loop. Most functions left uncompiled come from Kotlin `useMemo` / `useCallback` calls that omit
+dependencies, since Kotlin has no `exhaustive-deps` lint.
 
-### `reactCompiler.compilationMode`
+#### Reporting uncompiled functions
 
-- **Type:** `'annotation' | 'infer' | 'syntax' | 'all'`
-- **Default:** `'annotation'`
-
-React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
-
-### `reactCompiler.backend`
-
-- **Type:** `'babel' | 'oxc'`
-- **Default:** `'babel'`
-
-`'oxc'` compiles with the experimental Rust port of React Compiler from `oxc-transform-react` (install it next to the plugin), which is several times faster than `babel-plugin-react-compiler`. In `annotation` mode the pre-pass runs as text edits on oxc's own AST, without Babel, whose parse, scope crawls and code generation cost more than the compiler; a module it doesn't cover (a `var` that has to move, BigInt, a class, a pattern) goes through the Babel pre-pass, on a worker of its own, so that only one worker loads Babel. The native binding takes no callbacks, so the plugin works around them:
-
-- **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call inside a compiled function into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`, `Jsx` being a second import of the same function), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again. Calls elsewhere stay as they are.
-- **`incompatibleHooks`:** a function calling a listed hook is opted out with `"use no memo"` and reported as an `IncompatibleLibrary` `CompileError`.
-- **`logger`:** receives each diagnostic as a `CompileError` event naming the function it leaves uncompiled (`fnName`, `fnLoc`), with the diagnostic's own `detail.loc` and `detail.severity`, and `detail.category` derived from the reason (`PreserveManualMemo`, `IncompatibleLibrary`, otherwise `Unknown`). oxc reports some bail-outs, such as an incompatible library, as warnings, so the severity doesn't tell whether the function compiled. There are no `CompileSuccess` events.
-- **`mutableValue()`:** a module calling kotlin-react-compiler's `mutableValue()` is compiled with `babel-plugin-react-compiler`, which must then be installed too: only its `moduleTypeProvider` types the value so that a write through it is still rejected during render.
-- **Off:** `validateExhaustiveMemoizationDependencies` and `validateExhaustiveEffectDependencies`, which `babel-plugin-react-compiler` 1.0 doesn't have either.
-
-### `reactCompiler.preserveExistingMemoizationGuarantees`
-
-- **Type:** `boolean`
-- **Default:** `true`
-
-Controls `enablePreserveExistingMemoizationGuarantees` and `validatePreserveExistingMemoizationGuarantees` in `babel-plugin-react-compiler` (enabled by default there too). When `true`, a `useMemo` / `useCallback` result stays memoized, and a function whose existing memoization the compiler cannot preserve is left uncompiled. When `false`, more functions compile, but the compiler may drop a `useMemo` and recompute its value on every render: code that relies on the value keeping its identity, such as effect dependencies or options passed to TanStack Table, then sees a new value each render and can loop. Kotlin/JS `useMemo` / `useCallback` calls lack `exhaustive-deps` lint enforcement and often omit stable custom hook results, which is what most of the uncompiled functions come from.
-
-### `reactCompiler.incompatibleHooks`
-
-- **Type:** `Record<string, string[]>`
-- **Default:** `{}`
-
-Hooks, by module name, that the compiler cannot memoize safely, e.g. `{ 'react-use-measure': ['useMeasure'] }`: a function calling one is left uncompiled. They add to the libraries `babel-plugin-react-compiler` knows itself (the `watch()` of `react-hook-form`'s `useForm()`, `useReactTable` of `@tanstack/react-table`, `useVirtualizer` of `@tanstack/react-virtual`), which the plugin keeps a copy of because its `moduleTypeProvider` replaces the compiler's built-in one.
-
-### `reactCompiler.logger`
-
-- **Type:** `{ logEvent: (filename: string, event: ReactCompilerEvent) => void }`
-
-Receives the events `babel-plugin-react-compiler` logs for a module (the shape of its own `logger` option), once the
-module is compiled: `CompileSuccess` for a compiled function, `CompileSkip` for one opting out with `"use no memo"`,
-`CompileError` for one the compiler left as Kotlin/JS emitted it. Such a function is not memoized at all, and nothing
-else reports it, so code that relies on the compiler for stable identities should watch for it. Throwing from
-`logEvent` fails the build:
+The logger gets `babel-plugin-react-compiler` events per module: `CompileSuccess`, `CompileSkip` (`"use no memo"`) and
+`CompileError`. A function with a `CompileError` is not memoized at all and nothing else reports it, so if you rely on
+the compiler for stable identities, fail the build on it:
 
 ```javascript
 reactKotlinJs({
@@ -134,174 +99,22 @@ reactKotlinJs({
 })
 ```
 
-### `include`
+#### oxc backend
 
-- **Type:** `Array<string | RegExp>`
-- **Default:** `[/\.mjs$/]`
+`'oxc'` uses the experimental Rust port of React Compiler, several times faster than Babel. Install
+`oxc-transform-react` next to the plugin. Differences from `'babel'`:
 
-Module ID patterns to include for transformation, by both plugins. Modules in `node_modules` are always skipped.
+- the logger only receives `CompileError` events, and their `severity` doesn't tell whether the function compiled
+- modules calling kotlin-react-compiler's `mutableValue()` still compile with Babel, so `babel-plugin-react-compiler`
+  is needed for them
+- exhaustive dependency validation is off, as in `babel-plugin-react-compiler` 1.0
 
-### `isReactFC`
+### Good to know
 
-- **Type:** `(code: string) => boolean`
-
-Custom function to check if the code is a React functional component. Unless `reactCompiler.compilationMode` is
-`'annotation'`, it also picks the modules the React Compiler compiles.
-
-### `getComponentName`
-
-- **Type:** `(code: string) => string | undefined`
-
-Custom function to extract React component names from the code. Useful if your Kotlin/JS compiler generates different patterns.
-
-### `debug`
-
-- **Type:** `boolean`
-
-Output debug information about the transformed files.
+- React Compiler runs only in Vite. Kotlin/JS browser tests (`jsBrowserTest`) run without it, so a hook that promises
+  a stable identity should keep its own `useMemo` / `useCallback`.
+- Compiled modules are cached in `node_modules/.vite/vite-plugin-react-kotlinjs`.
 
 ## How it works
 
-1. **React Compiler Pre-Transform:** The `kotlin-react-compiler` plugin compiles modules that opt in with `"use memo"`
-   (or every React module, unless `compilationMode` is `'annotation'`) in one Babel pass: a pre-pass rewrites what
-   Kotlin/JS code generation emits into what the compiler accepts, then `babel-plugin-react-compiler` runs with a custom
-   `environment.moduleTypeProvider` that tells it `jsx()` / `jsxs()` from `react/jsx-runtime` and kotlin-react's JSX
-   runtime return frozen values, and that kotlin-react-compiler's `mutableValue()`, through which it reads a DOM node,
-   ref or signal an effect writes to, returns a value from outside React: the write compiles in the effect and is
-   still rejected during render. The pre-pass:
-
-   - moves `"use memo"` / `"use no memo"` back above Kotlin's `_init_properties_*()` call and default-argument handling,
-     both of them when a function opts out
-
-     ```js
-     // before
-     _init_properties_X_kt();
-     'use memo';
-     'use no memo';
-
-     // after
-     'use memo';
-     'use no memo';
-     _init_properties_X_kt();
-     ```
-
-   - prefixes synthetic `use*$lambda` / `Component$lambda$` helpers with `_`, so they aren't mistaken for hooks or
-     components
-
-   - rewrites `BigInt` literals (Kotlin `Long`) to `BigInt('1000')`, which the compiler can lower
-
-   - destructures indexed `useState` / `useTransition` results, so the compiler knows the setter is stable
-
-     ```js
-     // before
-     var t = useState(0);
-     var a = t[0];
-     var b = t[1];
-
-     // after
-     let [a, b] = useState(0);
-     ```
-
-    - `var` → `let` inside functions, only where block scoping keeps the meaning; otherwise one `let` at the top of the
-      function, or the `var` stays and the compiler skips that function. Module-level `var`s are left alone: a module
-      of an import cycle may be called before it is evaluated. (Kotlin/JS emits `let` / `const` itself starting with
-      Kotlin 2.5.20, see [KT-64348](https://youtrack.jetbrains.com/issue/KT-64348); this rewrite goes then.)
-
-    - imported `$ref` helpers (production Kotlin/JS moves callable-reference helpers into the target's module) → a
-      `_`-prefixed module-level alias, since the compiler treats any import named `use*` as a hook
-
-      ```js
-      // before
-      import { useFoo$ref1a2b3c4d as useFoo$ref } from './Foo.mjs';
-      useFoo$ref();
-
-      // after
-      import { useFoo$ref1a2b3c4d as useFoo$ref } from './Foo.mjs';
-      let _useFoo$ref = useFoo$ref;
-      _useFoo$ref();
-      ```
-
-    - Kotlin default arguments → `let` locals, since the compiler rejects reassigned hook parameters
-
-      ```js
-      // before
-      function useFoo(x) {
-        x = x === VOID ? d : x;
-      }
- 
-      // after
-      function useFoo(_x) {
-        let x = _x === VOID ? d : _x;
-      }
-      ```
-
-    - `props.ref` in `"use memo"` components → a destructured local, since the compiler rejects the property load as a
-      ref access during render
-
-      ```js
-      // before
-      f(props.ref);
- 
-      // after
-      let { ref: _ref } = props;
-      f(_ref);
-      ```
-
-    - repeated binding names inside each top-level function are renamed apart: the compiler renames a shadowed `tmp` to
-      `tmp_0` without checking that the name is free, which collides with Kotlin's own `tmp_0` temporaries
-
-      ```js
-      // before
-      let tmp = a;
-      if (c) {
-        let tmp = b;
-      }
- 
-      // after
-      let tmp = a;
-      if (c) {
-        let _tmp = b;
-      }
-      ```
-
-   The pre-pass touches only the functions the compiler compiles: in `annotation` mode, the outermost function of each
-   module statement whose source has a memo directive (about a third of a Kotlin/JS module); the rest of the module
-   stays as Kotlin/JS emitted it. For kotlin-react-compiler after 1.0.8, which avoids `js()` calls (the Kotlin compiler
-   parses each one, which made modules with many elements slow to compile), it also turns `__krcUseMemo();` into
-   `"use memo";` and, inside compiled functions, the `Object()` props objects start with into `{}`, which the compiler
-   memoizes as a value it creates.
-
-   The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one. Maps
-   are made only where something reads them: on the dev server, and in builds whose `build.sourcemap` is set.
-
-   **Speed:** modules compile on worker threads (a quarter of the cores, at most 4), as Vite transforms many modules at
-   once, and the results are kept in Vite's `cacheDir` (`node_modules/.vite/vite-plugin-react-kotlinjs`), appended by
-   each worker to a pack file of its own (a file per module spent a quarter of the compile time creating files), and
-   reused while the module's code, the options, the plugin and the Babel, React Compiler and oxc versions stay
-   the same. On a project with 4,600 compiled modules (oxc backend), the production Vite step takes 2.0 s with the cache and
-   2.3 s without it, against 1.85 s without the compiler; the first dev page load takes 3.8–4.0 s.
-
-2. **Fast Refresh (`serve` only):** The `vite:react-plugin-kotlinjs` plugin runs first, on the module as Kotlin/JS
-   emitted it (so `isReactFC` / `getComponentName` match that text), and rewrites React modules so the official Vite
-   React plugin can apply React Fast Refresh:
-
-    - the exported component getter is renamed so React Refresh registers it as a component (the export name stays
-      `get_X`)
-
-      ```js
-      // before
-      function get_X() { /* ... */ }
- 
-      // after
-      function GetX() { /* ... */ }
-      ```
-
-    - a `react/jsx-dev-runtime` marker is appended, since `@vitejs/plugin-react` only injects Fast Refresh into modules
-     that mention it
-
-## Why `@vitejs/plugin-react` is not enough?
-
-- Kotlin/JS generates named exports for components, which makes it impossible to use the default export.
-- Standard React Refresh Babel plugin does not recognize the generated component variable that actually returns the
-  React node.
-- Your FC lambdas must return a React node!
+See [HOW_IT_WORKS.md](HOW_IT_WORKS.md) for what the plugin rewrites in Kotlin/JS output and why.
