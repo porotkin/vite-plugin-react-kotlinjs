@@ -1,8 +1,11 @@
+import module from 'node:module';
 import { parentPort } from 'node:worker_threads';
 import type { ReactCompilerEvent } from '../options';
 import { type CacheEntry, writeCacheEntry } from '../shared/transform-cache';
 import { compileKotlinMjs } from './compile';
 import { compileKotlinMjsWithOxc, compileKotlinMjsWithOxcOnly } from './oxc';
+
+module.enableCompileCache?.();
 
 /**
  * `babel-plugin-react-compiler` reports details as class instances whose `reason`, `category`, … are getters, which
