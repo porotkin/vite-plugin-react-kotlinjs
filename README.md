@@ -19,7 +19,7 @@ In `build.gradle.kts` (any source set works, e.g. `webMainImplementation`):
 
 ```kotlin
 dependencies {
-  jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^2.1.3"))
+  jsMainImplementation(devNpm("@porotkin/vite-plugin-react-kotlinjs", "^2.1.4"))
 }
 ```
 
