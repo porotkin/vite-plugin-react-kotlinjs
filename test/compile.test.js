@@ -245,6 +245,18 @@ export function Card(props) {
         assert.equal(compileKotlinMjs(props('Object()')).code, compileKotlinMjs(props('{}')).code);
     });
 
+    test('builds a props object in the scope of its jsx() call, as React adopts it as the props of that one element', () => {
+        const { code, events } = compileKotlinMjs(`import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+export function Tooltip(props) {
+  'use memo';
+  var attrs = {};
+  attrs.value = props.value;
+  return jsx('i', attrs, props.k);
+}`);
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.doesNotMatch(code, /attrs = \$\[/);
+    });
+
     test('compiles a function kotlin-react-compiler marks with __krcUseMemo()', () => {
         const { code, events } = compileKotlinMjs(doWhileVar.replace("  'use memo';", '  __krcUseMemo();'));
         assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);

@@ -10,7 +10,7 @@ export interface CompileKotlinMjsResult {
 
 const jsxFunction = {
     kind: 'function',
-    positionalParams: ['read', 'freeze', 'read'],
+    positionalParams: ['read', 'mutate?', 'read'],
     restParam: null,
     calleeEffect: 'read',
     returnType: { kind: 'type', name: 'Any' },

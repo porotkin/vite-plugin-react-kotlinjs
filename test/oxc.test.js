@@ -7,6 +7,7 @@ import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import reactKotlinJs from '../dist/index.js';
 
 const KOTLIN_JSX = '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
+const JSX_UNWRAP = 'virtual:kotlin-react-compiler/unwrap/jsx-runtime';
 
 const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-react-compiler-'));
 
@@ -77,6 +78,30 @@ describe('oxc backend', () => {
         assert.equal(calls.length, 2);
         App({ title: 'b' });
         assert.equal(calls.length, 4);
+    });
+
+    test('pass each jsx() call a props object of its own, as React adopts it as the props of that one element', async () => {
+        const { compiled, compiler } = await compile(`import { jsx2uf3lx2x6pvok as jsx } from '${KOTLIN_JSX}';
+function Tooltip(props) {
+  'use memo';
+  var attrs = Object();
+  attrs.value = props.value;
+  return jsx('i', attrs, props.k);
+}
+export { Tooltip as Tooltip1a2b3c };`);
+        const unwrap = evaluate(compiler.load.handler(compiler.resolveId.handler(JSX_UNWRAP)), {}, '{ jsx: unwrap, jsxs: unwrap }');
+        const adopted = [];
+        const cache = [];
+        const Tooltip = evaluate(compiled.code, {
+            'react/compiler-runtime': { c: (size) => cache.length ? cache : Object.assign(cache, Array(size).fill(Symbol.for('react.memo_cache_sentinel'))) },
+            [JSX_UNWRAP]: unwrap,
+            [KOTLIN_JSX]: { jsx2uf3lx2x6pvok: (_type, props) => adopted.push(props) },
+        }, 'Tooltip');
+
+        Tooltip({ value: 'v', k: 'a' });
+        Tooltip({ value: 'v', k: 'b' });
+        assert.deepEqual(adopted, [{ value: 'v' }, { value: 'v' }]);
+        assert.notEqual(adopted[0], adopted[1]);
     });
 
     test('leave a function calling a hook listed in incompatibleHooks uncompiled', async () => {

@@ -9,7 +9,7 @@ import {compileKotlinMjs, type CompileKotlinMjsResult, importsKrcMutableValue, w
 export const JSX_UNWRAP_SOURCE = 'virtual:kotlin-react-compiler/unwrap';
 export const JSX_UNWRAP_RUNTIME = `${JSX_UNWRAP_SOURCE}/jsx-runtime`;
 const JSX_UNWRAP_RUNTIME_ID = `\0${JSX_UNWRAP_RUNTIME}`;
-export const JSX_UNWRAP_RUNTIME_CODE = `const unwrap = (callee, { a0, a1, a2 }) => callee(a0, a1, a2);
+export const JSX_UNWRAP_RUNTIME_CODE = `const unwrap = (callee, { a0, a1, a2 }) => callee(a0, a1 && { ...a1 }, a2);
 export { unwrap as jsx, unwrap as jsxs };
 `;
 
