@@ -52,8 +52,13 @@ describe('oxc backend', () => {
         assert.match(compiled.code, /virtual:kotlin-react-compiler\/unwrap\/jsx-runtime/);
         assert.ok(compiled.map.mappings.length > 0);
 
-        const runtimeId = compiler.resolveId('virtual:kotlin-react-compiler/unwrap/jsx-runtime');
-        const unwrap = evaluate(compiler.load(runtimeId), {}, '{ jsx: unwrap, jsxs: unwrap }');
+        const runtime = 'virtual:kotlin-react-compiler/unwrap/jsx-runtime';
+        assert.ok(compiler.resolveId.filter.id.test(runtime));
+        assert.ok(!compiler.resolveId.filter.id.test(`${runtime}x`));
+        const runtimeId = compiler.resolveId.handler(runtime);
+        assert.ok(compiler.load.filter.id.test(runtimeId));
+        assert.ok(!compiler.load.filter.id.test(runtime));
+        const unwrap = evaluate(compiler.load.handler(runtimeId), {}, '{ jsx: unwrap, jsxs: unwrap }');
         const calls = [];
         const cache = [];
         const App = evaluate(compiled.code, {

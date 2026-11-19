@@ -259,9 +259,11 @@ export function compilePreparedKotlinMjsWithOxc(
     return { code: result.code as string, map: (result.map ?? null) as object | null, events };
 }
 
+const exactly = (id: string) => new RegExp(`^${id.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`);
+
 export const jsxUnwrapRuntime = {
-    resolveId: (id: string) => (id === JSX_UNWRAP_RUNTIME ? JSX_UNWRAP_RUNTIME_ID : null),
-    load: (id: string) => (id === JSX_UNWRAP_RUNTIME_ID ? JSX_UNWRAP_RUNTIME_CODE : null),
+    resolveId: { filter: { id: exactly(JSX_UNWRAP_RUNTIME) }, handler: () => JSX_UNWRAP_RUNTIME_ID },
+    load: { filter: { id: exactly(JSX_UNWRAP_RUNTIME_ID) }, handler: () => JSX_UNWRAP_RUNTIME_CODE },
 };
 
 let remapping: ((maps: object[], loader: () => null) => object) | undefined;
