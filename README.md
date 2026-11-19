@@ -278,8 +278,8 @@ Output debug information about the transformed files.
    once, and the results are kept in Vite's `cacheDir` (`node_modules/.vite/vite-plugin-react-kotlinjs`), appended by
    each worker to a pack file of its own (a file per module spent a quarter of the compile time creating files), and
    reused while the module's code, the options, the plugin and the Babel, React Compiler and oxc versions stay
-   the same. On a project with 4,600 compiled modules (oxc backend), a production build takes 0.4 s longer than without the
-   compiler with the cache, 1.3 s longer without it, and the first dev page load 0–0.2 s longer.
+   the same. On a project with 4,600 compiled modules (oxc backend), the production Vite step takes 2.0 s with the cache and
+   2.3 s without it, against 1.85 s without the compiler; the first dev page load takes 3.8–4.0 s.
 
 2. **Fast Refresh (`serve` only):** The `vite:react-plugin-kotlinjs` plugin runs first, on the module as Kotlin/JS
    emitted it (so `isReactFC` / `getComponentName` match that text), and rewrites React modules so the official Vite
