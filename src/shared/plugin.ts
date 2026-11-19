@@ -1,3 +1,8 @@
+export interface TransformResult {
+    code: string;
+    map: object | null;
+}
+
 export interface TransformPluginConfig {
     name: string;
     apply?: 'serve' | 'build';
@@ -8,7 +13,7 @@ export interface TransformPluginConfig {
      * Returns the rewritten code, or `undefined` to leave the module untouched. A rewrite that moves code returns
      * its source map; `map: null` keeps the module's existing map.
      */
-    transform: (code: string, id: string) => { code: string; map: object | null } | undefined;
+    transform: (code: string, id: string) => TransformResult | undefined | Promise<TransformResult | undefined>;
     debug?: boolean;
 }
 
@@ -24,10 +29,13 @@ export function createTransformPlugin({ name, apply, include, codeInclude, trans
                 ...(codeInclude && { code: { include: codeInclude } }),
             },
             handler(code: string, id: string) {
+                const finish = (transformed: TransformResult | undefined) => {
+                    if (transformed === undefined) return null;
+                    if (debug) console.log(`[vite-plugin-react-kotlinjs] ${name} transformed: ${id}`);
+                    return transformed;
+                };
                 const transformed = transform(code, id);
-                if (transformed === undefined) return null;
-                if (debug) console.log(`[vite-plugin-react-kotlinjs] ${name} transformed: ${id}`);
-                return transformed;
+                return transformed instanceof Promise ? transformed.then(finish) : finish(transformed);
             },
         },
     };

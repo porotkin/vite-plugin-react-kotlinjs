@@ -274,6 +274,9 @@ Output debug information about the transformed files.
    The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one. Maps
    are made only where something reads them: on the dev server, and in builds whose `build.sourcemap` is set.
 
+   **Speed:** modules compile on worker threads (a quarter of the cores, at most 4), as Vite transforms many modules at
+   once.
+
 2. **Fast Refresh (`serve` only):** The `vite:react-plugin-kotlinjs` plugin runs first, on the module as Kotlin/JS
    emitted it (so `isReactFC` / `getComponentName` match that text), and rewrites React modules so the official Vite
    React plugin can apply React Fast Refresh:
