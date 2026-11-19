@@ -1,6 +1,6 @@
 import {createRequire} from 'node:module';
 import {type CompileOptions, DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type CompilationMode, type ReactCompilerEvent} from '../options';
-import {parseAst} from 'vite';
+import {parseAst} from '../shared/parse-ast';
 import {projectRequire} from '../shared/project';
 import {mayNeedPrepass, prepass} from './babel-prepass';
 import {lightPrepass} from './light-prepass';

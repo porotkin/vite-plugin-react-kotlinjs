@@ -1,6 +1,6 @@
 // oxc's ESTree is untyped here like Babel's paths are in babel-prepass.ts: nodes are `any`.
 import MagicString from 'magic-string';
-import { parseAst } from 'vite';
+import { parseAst } from '../shared/parse-ast';
 import { KOTLIN_JSX_RUNTIME, type ReactCompilerEvent } from '../options';
 
 /**
