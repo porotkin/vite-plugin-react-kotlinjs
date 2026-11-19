@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { ResolvedOptions } from '../options';
 import { createTransformPlugin } from '../shared/plugin';
 import { projectRequire } from '../shared/project';
-import { createTransformCache, type CachedTransform, sha1 } from '../shared/transform-cache';
+import { type CacheEntry, createTransformCache, sha1, type TransformCache } from '../shared/transform-cache';
 import { createWorkerPool } from '../shared/worker-pool';
 import { type CompileKotlinMjsResult, importsKrcMutableValue, KRC_USE_MEMO } from './compile';
 import { jsxUnwrapRuntime } from './oxc';
@@ -62,16 +62,17 @@ function compilerTasks(options: ResolvedOptions) {
     const script = new URL('./worker.js', import.meta.url);
     const pool = createWorkerPool(script);
     const babelPool = createWorkerPool(script, BABEL_WORKERS);
-    const compile = async (task: Task, code: string, id: string) => {
-        if (task === 'compileKotlinMjs') return pool.run<CompileKotlinMjsResult>(task, code, id, compileOptions);
+    const compile = async (task: Task, code: string, id: string, entry?: CacheEntry) => {
+        const args = [code, id, compileOptions];
+        if (task === 'compileKotlinMjs') return pool.run<CompileKotlinMjsResult>(task, args, entry);
         const withoutBabel = importsKrcMutableValue(code)
             ? undefined
-            : await pool.run<CompileKotlinMjsResult | undefined>('compileKotlinMjsWithOxcOnly', code, id, compileOptions);
-        return withoutBabel ?? babelPool.run<CompileKotlinMjsResult>(task, code, id, compileOptions);
+            : await pool.run<CompileKotlinMjsResult | undefined>('compileKotlinMjsWithOxcOnly', args, entry);
+        return withoutBabel ?? babelPool.run<CompileKotlinMjsResult>(task, args, entry);
     };
     const { backend, compilationMode, preserveExistingMemoizationGuarantees, incompatibleHooks } = options;
     let compileOptions = { compilationMode, preserveExistingMemoizationGuarantees, incompatibleHooks, sourceMaps: true };
-    let cache: CachedTransform<CompileKotlinMjsResult> | undefined;
+    let cache: TransformCache<CompileKotlinMjsResult> | undefined;
     return {
         configure(config: ResolvedConfig) {
             const sourceMaps = config.command === 'serve' || Boolean(config.build.sourcemap);
@@ -81,11 +82,7 @@ function compilerTasks(options: ResolvedOptions) {
         },
         async run(task: Task, code: string, id: string) {
             const source = cache && sha1(code);
-            let result = source ? await cache!.get(id, source) : undefined;
-            if (!result) {
-                result = await compile(task, code, id);
-                if (source) cache!.set(id, source, result);
-            }
+            const result = (source && cache!.read(id, source)) || await compile(task, code, id, source ? cache!.entry(id, source) : undefined);
             for (const event of result.events) options.logger?.logEvent(id, event);
             return { code: result.code, map: result.map };
         },

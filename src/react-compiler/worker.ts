@@ -1,5 +1,6 @@
 import { parentPort } from 'node:worker_threads';
 import type { ReactCompilerEvent } from '../options';
+import { type CacheEntry, writeCacheEntry } from '../shared/transform-cache';
 import { compileKotlinMjs } from './compile';
 import { compileKotlinMjsWithOxc, compileKotlinMjsWithOxcOnly } from './oxc';
 
@@ -20,10 +21,12 @@ const tasks: Record<string, (...args: any[]) => { events: ReactCompilerEvent[] }
     compileKotlinMjsWithOxcOnly,
 };
 
-parentPort!.on('message', ({ id, task, args }) => {
+parentPort!.on('message', ({ id, task, args, cache }: { id: number; task: string; args: unknown[]; cache?: CacheEntry }) => {
     try {
-        const result = tasks[task](...args);
-        parentPort!.postMessage({ id, result: result && { ...result, events: result.events.map(cloneable) } });
+        const made = tasks[task](...args);
+        const result = made && { ...made, events: made.events.map(cloneable) };
+        if (result && cache) writeCacheEntry(cache, result);
+        parentPort!.postMessage({ id, result });
     } catch (error: any) {
         parentPort!.postMessage({ id, error: { message: String(error?.message ?? error), stack: error?.stack } });
     }

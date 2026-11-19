@@ -12,7 +12,8 @@ interface Slot {
 }
 
 export interface WorkerPool {
-    run<T>(task: string, ...args: unknown[]): Promise<T>;
+    /** Runs `task(...args)`; with `cache`, the worker also stores the result there. */
+    run<T>(task: string, args: unknown[], cache?: unknown): Promise<T>;
     terminate(): Promise<void>;
 }
 
@@ -54,13 +55,13 @@ export function createWorkerPool(script: URL, size = DEFAULT_SIZE): WorkerPool {
     }
 
     return {
-        run(task, ...args) {
+        run(task, args, cache) {
             const slot = leastBusy();
             const id = nextId++;
             if (slot.tasks.size === 0) slot.worker.ref();
             return new Promise((resolve, reject) => {
                 slot.tasks.set(id, { resolve, reject });
-                slot.worker.postMessage({ id, task, args });
+                slot.worker.postMessage({ id, task, args, cache });
             });
         },
         async terminate() {

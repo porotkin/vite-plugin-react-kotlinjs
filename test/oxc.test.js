@@ -222,12 +222,12 @@ function useHandler(props) {
 }
 export { useHandler };`;
         const first = await compile(module, {}, config);
-        await new Promise((resolve) => setTimeout(resolve, 100));
         const root = path.join(config.cacheDir, 'vite-plugin-react-kotlinjs');
-        const [entry] = fs.readdirSync(root, { recursive: true }).filter((f) => f.endsWith('.json')).map((f) => path.join(root, f));
-        const stored = JSON.parse(fs.readFileSync(entry, 'utf8'));
+        const [pack] = fs.readdirSync(root, { recursive: true }).filter((f) => f.endsWith('.pack')).map((f) => path.join(root, f));
+        const line = fs.readFileSync(pack, 'utf8').trimEnd();
+        const stored = JSON.parse(line.slice(2 * 41));
         stored.result.code = `/* from the cache */\n${stored.result.code}`;
-        fs.writeFileSync(entry, JSON.stringify(stored));
+        fs.writeFileSync(pack, `${line.slice(0, 2 * 41)}${JSON.stringify(stored)}\n`);
 
         const second = await compile(module, {}, config);
         assert.equal(second.compiled.code, `/* from the cache */\n${first.compiled.code}`);
