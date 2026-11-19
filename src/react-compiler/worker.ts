@@ -1,7 +1,7 @@
 import { parentPort } from 'node:worker_threads';
 import type { ReactCompilerEvent } from '../options';
 import { compileKotlinMjs } from './compile';
-import { compileKotlinMjsWithOxc } from './oxc';
+import { compileKotlinMjsWithOxc, compileKotlinMjsWithOxcOnly } from './oxc';
 
 /**
  * `babel-plugin-react-compiler` reports details as class instances whose `reason`, `category`, … are getters, which
@@ -14,15 +14,16 @@ function cloneable(event: ReactCompilerEvent): ReactCompilerEvent {
     return { ...event, detail: { ...detail.options, category, reason, description, severity, loc } };
 }
 
-const tasks: Record<string, (...args: any[]) => { events: ReactCompilerEvent[] }> = {
+const tasks: Record<string, (...args: any[]) => { events: ReactCompilerEvent[] } | undefined> = {
     compileKotlinMjs,
     compileKotlinMjsWithOxc,
+    compileKotlinMjsWithOxcOnly,
 };
 
 parentPort!.on('message', ({ id, task, args }) => {
     try {
         const result = tasks[task](...args);
-        parentPort!.postMessage({ id, result: { ...result, events: result.events.map(cloneable) } });
+        parentPort!.postMessage({ id, result: result && { ...result, events: result.events.map(cloneable) } });
     } catch (error: any) {
         parentPort!.postMessage({ id, error: { message: String(error?.message ?? error), stack: error?.stack } });
     }

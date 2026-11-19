@@ -277,6 +277,17 @@ export function compileKotlinMjsWithOxc(source: string, filename: string, option
     return compilePrepared(lightlyPrepared(code, filename, options) ?? prepareKotlinMjsForOxc(code, filename, options), filename, options);
 }
 
+/**
+ * `compileKotlinMjsWithOxc` without Babel, or `undefined` for a module only Babel prepares or compiles: the plugin
+ * hands those to a worker of their own, so that one worker alone loads Babel.
+ */
+export function compileKotlinMjsWithOxcOnly(source: string, filename: string, options: CompileOptions = {}): CompileKotlinMjsResult | undefined {
+    if (importsKrcMutableValue(source)) return undefined;
+    const code = withMemoDirectives(source);
+    const prepared = lightlyPrepared(code, filename, options);
+    return prepared && compilePrepared(prepared, filename, options);
+}
+
 function lightlyPrepared(code: string, filename: string, { compilationMode = DEFAULT_COMPILATION_MODE, incompatibleHooks = {}, sourceMaps = true }: CompileOptions) {
     return compilationMode === 'annotation' ? lightPrepass(code, filename, incompatibleHooks, sourceMaps) : undefined;
 }
