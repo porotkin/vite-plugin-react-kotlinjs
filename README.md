@@ -90,7 +90,7 @@ React Compiler compilation mode when transforming Kotlin/JS `.mjs` modules.
 
 `'oxc'` compiles with the experimental Rust port of React Compiler from `oxc-transform-react` (install it next to the plugin), which is several times faster than `babel-plugin-react-compiler`. The Babel pre-pass still runs first. The native binding takes no callbacks, so the plugin works around them:
 
-- **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again.
+- **No `moduleTypeProvider`:** instead of typing `jsx()` / `jsxs()`, the pre-pass turns each call inside a compiled function into a JSX element carrying its arguments (`<Jsx a0={type} a1={props} a2={key} />`, `Jsx` being a second import of the same function), which the compiler memoizes as JSX; a virtual `jsx-runtime` calls the original function with them again. Calls elsewhere stay as they are.
 - **`incompatibleHooks`:** a function calling a listed hook is opted out with `"use no memo"` and reported as an `IncompatibleLibrary` `CompileError`.
 - **`logger`:** receives each diagnostic as a `CompileError` event naming the function it leaves uncompiled (`fnName`, `fnLoc`), with the diagnostic's own `detail.loc` and `detail.severity`, and `detail.category` derived from the reason (`PreserveManualMemo`, `IncompatibleLibrary`, otherwise `Unknown`). oxc reports some bail-outs, such as an incompatible library, as warnings, so the severity doesn't tell whether the function compiled. There are no `CompileSuccess` events.
 - **`mutableValue()`:** a module calling kotlin-react-compiler's `mutableValue()` is compiled with `babel-plugin-react-compiler`, which must then be installed too: only its `moduleTypeProvider` types the value so that a write through it is still rejected during render.
@@ -264,7 +264,15 @@ Output debug information about the transformed files.
       }
       ```
 
-   The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one.
+   The pre-pass touches only the functions the compiler compiles: in `annotation` mode, the outermost function of each
+   module statement whose source has a memo directive (about a third of a Kotlin/JS module); the rest of the module
+   stays as Kotlin/JS emitted it. For kotlin-react-compiler after 1.0.8, which avoids `js()` calls (the Kotlin compiler
+   parses each one, which made modules with many elements slow to compile), it also turns `__krcUseMemo();` into
+   `"use memo";` and, inside compiled functions, the `Object()` props objects start with into `{}`, which the compiler
+   memoizes as a value it creates.
+
+   The compiled module carries a source map back to the Kotlin/JS output, which Vite chains with the Kotlin one. Maps
+   are made only where something reads them: on the dev server, and in builds whose `build.sourcemap` is set.
 
 2. **Fast Refresh (`serve` only):** The `vite:react-plugin-kotlinjs` plugin runs first, on the module as Kotlin/JS
    emitted it (so `isReactFC` / `getComponentName` match that text), and rewrites React modules so the official Vite

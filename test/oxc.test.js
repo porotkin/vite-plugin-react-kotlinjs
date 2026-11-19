@@ -1,17 +1,27 @@
 import assert from 'node:assert/strict';
 import {describe, test} from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { originalPositionFor, TraceMap } from '@jridgewell/trace-mapping';
 import reactKotlinJs from '../dist/index.js';
 
 const KOTLIN_JSX = '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
 
-function compile(code, reactCompiler = {}) {
+const tempDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'kotlin-react-compiler-'));
+
+function positionOf(code, text) {
+    const lines = code.slice(0, code.indexOf(text)).split('\n');
+    return { line: lines.length, column: lines.at(-1).length };
+}
+
+async function compile(code, reactCompiler = {}, config = undefined) {
     const events = [];
     const logger = { logEvent: (_filename, event) => events.push(event) };
-    const [, prepass, compiler] = reactKotlinJs({ reactCompiler: { backend: 'oxc', logger, ...reactCompiler } });
-    const prepared = prepass.transform.handler(code, 'App.mjs');
-    if (!prepared) return { prepared, events };
-    const compiled = compiler.transform.handler(prepared.code, 'App.mjs');
-    return { prepared, compiled, events, compiler };
+    const [, compiler] = reactKotlinJs({ reactCompiler: { backend: 'oxc', logger, ...reactCompiler } });
+    if (config) compiler.configResolved(config);
+    const compiled = await compiler.transform.handler(code, 'App.mjs');
+    return { compiled, events, compiler };
 }
 
 function evaluate(code, modules, name) {
@@ -36,8 +46,8 @@ function App(props) {
 export { App as App1a2b3c };`;
 
 describe('oxc backend', () => {
-    test('memoize Kotlin jsx() calls as JSX elements and call them with the same arguments at runtime', () => {
-        const { compiled, compiler } = compile(component);
+    test('memoize Kotlin jsx() calls as JSX elements and call them with the same arguments at runtime', async () => {
+        const { compiled, compiler } = await compile(component);
         assert.match(compiled.code, /react\/compiler-runtime/);
         assert.match(compiled.code, /virtual:kotlin-react-compiler\/unwrap\/jsx-runtime/);
         assert.ok(compiled.map.mappings.length > 0);
@@ -64,8 +74,8 @@ describe('oxc backend', () => {
         assert.equal(calls.length, 4);
     });
 
-    test('leave a function calling a hook listed in incompatibleHooks uncompiled', () => {
-        const { compiled, events } = compile(`import { useWindowVirtualizer as useWindowVirtualizer } from '@tanstack/react-virtual';
+    test('leave a function calling a hook listed in incompatibleHooks uncompiled', async () => {
+        const { compiled, events } = await compile(`import { useWindowVirtualizer as useWindowVirtualizer } from '@tanstack/react-virtual';
 import { jsx as jsx } from 'react/jsx-runtime';
 function List(props) {
   'use memo';
@@ -77,8 +87,8 @@ export { List as List1a2b3c };`, { incompatibleHooks: { '@tanstack/react-virtual
         assert.deepEqual(events.map((e) => [e.kind, e.fnName, e.detail.category]), [['CompileError', 'List', 'IncompatibleLibrary']]);
     });
 
-    test('leave a function calling a listed hook uncompiled in infer mode', () => {
-        const { compiled, events } = compile(`import { useWindowVirtualizer as useWindowVirtualizer } from 'my-virtualizer';
+    test('leave a function calling a listed hook uncompiled in infer mode', async () => {
+        const { compiled, events } = await compile(`import { useWindowVirtualizer as useWindowVirtualizer } from 'my-virtualizer';
 import { jsx as jsx } from 'react/jsx-runtime';
 function List(props) {
   var virtualizer = useWindowVirtualizer(props.options);
@@ -92,22 +102,19 @@ export { List as List1a2b3c };`, {
         assert.deepEqual(events.map((e) => [e.kind, e.fnName, e.detail.category]), [['CompileError', 'List', 'IncompatibleLibrary']]);
     });
 
-    test('compile both same-id modules when prepasses interleave', () => {
-        const [, prepass, compiler] = reactKotlinJs({ reactCompiler: { backend: 'oxc' } });
-        const firstPrepared = prepass.transform.handler(component, 'App.mjs');
-        const secondPrepared = prepass.transform.handler(component, 'App.mjs');
-        const first = compiler.transform.handler(firstPrepared.code, 'App.mjs');
-        const second = compiler.transform.handler(secondPrepared.code, 'App.mjs');
+    test('compile the same module twice at once', async () => {
+        const [, compiler] = reactKotlinJs({ reactCompiler: { backend: 'oxc' } });
+        const results = await Promise.all([compiler.transform.handler(component, 'App.mjs'), compiler.transform.handler(component, 'App.mjs')]);
 
-        for (const result of [first, second]) {
+        for (const result of results) {
             assert.match(result.code, /react\/compiler-runtime/);
-            assert.doesNotMatch(result.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__/);
             assert.doesNotMatch(result.code, /<Jsx/);
         }
+        assert.equal(results[0].code, results[1].code);
     });
 
-    test('report a function whose manual memoization cannot be preserved as PreserveManualMemo', () => {
-        const { events } = compile(`import { useCallback as useCallback } from 'react';
+    test('report a function whose manual memoization cannot be preserved as PreserveManualMemo', async () => {
+        const { events } = await compile(`import { useCallback as useCallback } from 'react';
 function useHandler(props) {
   'use memo';
   return useCallback(() => props.onClick(props.id), [props.id]);
@@ -118,8 +125,8 @@ export { useHandler as useHandler1a2b3c };`);
         assert.equal(events[0].detail.loc.start.line, 4);
     });
 
-    test('locate a diagnostic after non-ASCII text, which oxc reports in UTF-8 bytes', () => {
-        const { events } = compile(`var arrows = '←→↑↓ ✈';
+    test('locate a diagnostic after non-ASCII text, which oxc reports in UTF-8 bytes', async () => {
+        const { events } = await compile(`var arrows = '←→↑↓ ✈';
 import { useCallback as useCallback } from 'react';
 const useHandler = (props) => {
   'use memo';
@@ -129,19 +136,19 @@ export { useHandler as useHandler1a2b3c };`);
         assert.deepEqual(events.map((e) => [e.fnName, e.fnLoc.start.line, e.detail.loc.start.line]), [['useHandler', 3, 5]]);
     });
 
-    test("compile a module calling mutableValue() with Babel, which rejects a write through it during render", () => {
+    test("compile a module calling mutableValue() with Babel, which rejects a write through it during render", async () => {
         const mutableValueImport = "import { mutableValue1a2b3c as mutableValue } from '../krc/com/github/porotkin/reactcompiler/MutableValue.mjs';";
-        const { prepared: duringRender, events } = compile(`${mutableValueImport}
+        const { compiled: duringRender, events } = await compile(`${mutableValueImport}
 function useCanary(target) {
   'use memo';
   var write = () => { mutableValue(target).hidden = true; };
   write();
 }
 export { useCanary };`);
-        assert.doesNotMatch(duringRender.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__|react\/compiler-runtime/);
+        assert.doesNotMatch(duringRender.code, /react\/compiler-runtime/);
         assert.deepEqual(events.map((e) => e.kind), ['CompileError']);
 
-        const { prepared: inEffect } = compile(`${mutableValueImport}
+        const { compiled: inEffect } = await compile(`${mutableValueImport}
 import { useEffect as useEffect } from 'react';
 function useHide(target) {
   'use memo';
@@ -151,44 +158,39 @@ export { useHide };`);
         assert.match(inEffect.code, /react\/compiler-runtime/);
     });
 
-    test('hoist a memo directive above Kotlin property initialization without running Babel', () => {
-        const code = `function App(props) {
+    test('hoist a memo directive above Kotlin property initialization without running Babel', async () => {
+        const { compiled, events } = await compile(`import { jsx as jsx } from 'react/jsx-runtime';
+function App(props) {
   _init_properties_App_kt();
   'use memo';
-  // preserve this comment
-  return props.value;
+  return jsx('b', { children: props.value });
 }
-export { App };`;
-        const { prepared, compiled } = compile(code);
-        const preparedCode = prepared.code.replace(/\n\/\*__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__\*\/$/, '');
-
-        assert.equal(prepared.map, null);
-        assert.equal(preparedCode.split('\n').length, code.split('\n').length);
-        assert.equal(
-            preparedCode
-                .replace("function App(props) {'use memo';", 'function App(props) {')
-                .replace(/^ +$/m, "  'use memo';"),
-            code,
-        );
-        assert.match(preparedCode, /\/\/ preserve this comment/);
-        assert.doesNotMatch(compiled.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__/);
+export { App };`);
+        assert.match(compiled.code, /react\/compiler-runtime/);
+        assert.deepEqual(events, []);
     });
 
-    test('run Babel for a module with function-local var declarations', () => {
-        const { prepared, compiled } = compile(`function App(props) {
+    test('run Babel for a module with function-local var declarations', async () => {
+        const { compiled } = await compile(`function App(props) {
   'use memo';
   var value = props.value;
   return value;
 }
 export { App };`);
 
-        assert.match(prepared.code, /let value = props\.value;/);
         assert.match(compiled.code, /const value = props\.value;/);
-        assert.doesNotMatch(compiled.code, /__VITE_PLUGIN_REACT_KOTLINJS_OXC_PREPARED__/);
+        const { line } = originalPositionFor(new TraceMap(compiled.map), positionOf(compiled.code, 'props.value'));
+        assert.equal(line, 3);
     });
 
-    test('run Babel for listed incompatible-hook sources without JSX runtime imports', () => {
-        const { prepared, events } = compile(`import { useWindowVirtualizer as useWindowVirtualizer } from 'my-virtualizer';
+    test('leave source maps out of a build that emits none', async () => {
+        const { compiled } = await compile(component, {}, { command: 'build', cacheDir: tempDir(), build: { sourcemap: false } });
+        assert.match(compiled.code, /react\/compiler-runtime/);
+        assert.equal(compiled.map, null);
+    });
+
+    test('run Babel for listed incompatible-hook sources without JSX runtime imports', async () => {
+        const { compiled, events } = await compile(`import { useWindowVirtualizer as useWindowVirtualizer } from 'my-virtualizer';
 function useRows(options) {
   'use memo';
   return useWindowVirtualizer(options);
@@ -198,18 +200,24 @@ export { useRows };`, {
             incompatibleHooks: { 'my-virtualizer': ['useWindowVirtualizer'] },
         });
 
-        assert.ok(prepared.map);
-        assert.match(prepared.code, /use no memo/);
+        assert.ok(compiled.map);
+        assert.match(compiled.code, /use no memo/);
         assert.deepEqual(events.map((event) => [event.kind, event.fnName, event.detail.category]), [
             ['CompileError', 'useRows', 'IncompatibleLibrary'],
         ]);
     });
 
-    test('skip modules without "use memo" in annotation mode', () => {
-        const { prepared } = compile(`import { jsx as jsx } from 'react/jsx-runtime';
+    test('compile a function kotlin-react-compiler marks with __krcUseMemo()', async () => {
+        const { compiled } = await compile(component.replace("  'use memo';", '  __krcUseMemo();'));
+        assert.match(compiled.code, /react\/compiler-runtime/);
+        assert.doesNotMatch(compiled.code, /__krcUseMemo/);
+    });
+
+    test('skip modules without "use memo" in annotation mode', async () => {
+        const { compiled } = await compile(`import { jsx as jsx } from 'react/jsx-runtime';
 function App() {
   return jsx('div', {});
 }`);
-        assert.equal(prepared, null);
+        assert.equal(compiled, null);
     });
 });

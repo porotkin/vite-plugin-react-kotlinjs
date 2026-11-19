@@ -1,4 +1,4 @@
-import {DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerEvent, type ReactCompilerOptions} from '../options';
+import {type CompileOptions, DEFAULT_COMPILATION_MODE, KOTLIN_JSX_RUNTIME, type ReactCompilerEvent} from '../options';
 import {projectRequire} from '../shared/project';
 import {babelPrepass} from './babel-prepass';
 
@@ -117,16 +117,29 @@ function loadToolchain() {
     return toolchain;
 }
 
+/**
+ * kotlin-react-compiler after 1.0.8 marks the functions it hands React Compiler with a call of `__krcUseMemo()`, which
+ * becomes the `"use memo"` directive here: a `js("\"use memo\"")` is parsed by the Kotlin compiler at every call.
+ */
+const KRC_USE_MEMO_CALL = '__krcUseMemo();';
+export const KRC_USE_MEMO = /__krcUseMemo\(\);/;
+
+export function withMemoDirectives(code: string): string {
+    return code.includes(KRC_USE_MEMO_CALL) ? code.replaceAll(KRC_USE_MEMO_CALL, "'use memo';") : code;
+}
+
 export function compileKotlinMjs(
-    code: string,
+    source: string,
     filename = 'module.mjs',
     {
         compilationMode = DEFAULT_COMPILATION_MODE,
         preserveExistingMemoizationGuarantees,
         incompatibleHooks = {},
         logger,
-    }: ReactCompilerOptions = {},
+        sourceMaps = true,
+    }: CompileOptions = {},
 ): CompileKotlinMjsResult {
+    const code = withMemoDirectives(source);
     const { babel, reactCompiler } = loadToolchain();
     const events: ReactCompilerEvent[] = [];
     const result = babel.transformSync(code, {
@@ -135,9 +148,9 @@ export function compileKotlinMjs(
         configFile: false,
         babelrc: false,
         comments: false,
-        sourceMaps: true,
+        sourceMaps,
         plugins: [
-            babelPrepass,
+            babelPrepass(compilationMode),
             [
                 reactCompiler,
                 {

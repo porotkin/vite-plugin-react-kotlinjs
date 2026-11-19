@@ -1,10 +1,16 @@
 // Babel is resolved from the Kotlin/JS project at runtime and ships no types here, so its paths and nodes are `any`.
+import type { CompilationMode } from '../options';
+
 const COMPONENT_NAME = /^[A-Z]/;
 const SYNTHETIC_REF_IMPORT = /\$ref(?:[a-z0-9]{8,16})?$/;
 // Kotlin names lambdas `useFoo$...` / `Component$lambda$...`; the compiler would mistake them for hooks/components.
 const SYNTHETIC_HELPER = /^(?:use[A-Z0-9]\w*|[A-Z]\w*\$lambda)\$/;
 const MEMO_DIRECTIVES = new Set(['use memo', 'use no memo']);
+const MEMO_DIRECTIVE_TEXT = /(["'])use (?:no )?memo\1/g;
 const STATE_HOOKS = new Set(['useState', 'useTransition']);
+const STATE_HOOK_NAME = /\buse(?:State|Transition)\b/;
+const BIGINT_LITERAL = /\b\d+n\b/;
+const EMPTY_OBJECT_CALL = 'Object()';
 
 export function mayNeedPrepass(code: string): boolean {
     const directivePrologue = /^(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*(?:\r?\n|$)|"(?:\\.|[^"\\])*"\s*;?\s*|'(?:\\.|[^'\\])*'\s*;?\s*)*$/;
@@ -20,30 +26,87 @@ export function mayNeedPrepass(code: string): boolean {
  * (hook callbacks, callable references, delegates, effect returns) are lowered by kotlin-react-compiler in IR;
  * what is left here are JavaScript codegen artifacts. It runs in `pre`, so the compiler sees its result in the same pass.
  */
-export function babelPrepass({ types: t }: { types: any }) {
-    return {
-        pre(file: { path: any }) {
-            const program = file.path;
-            hoistMemoDirectives(program, t);
-            renameSyntheticHelpers(program);
-            program.traverse({
-                // The compiler has no lowering for BigInt literals (Kotlin `Long`); the string keeps 64-bit precision.
-                BigIntLiteral: (path: any) => void path.replaceWith(t.callExpression(t.identifier('BigInt'), [t.stringLiteral(path.node.value)])),
-            });
-            destructureStateHooks(program, t);
-            program.scope.crawl();
-            blockScopeVars(program, t);
-            program.scope.crawl();
-            aliasSyntheticImports(program, t);
-            program.traverse({
-                Function(fn: any) {
-                    rewriteDefaultParams(fn, t);
-                    destructurePropsRef(fn, t);
-                },
-            });
-            uniqueBindingNames(program);
+export function babelPrepass(compilationMode: CompilationMode) {
+    return ({ types: t }: { types: any }) => ({
+        pre(file: { path: any; code: string }) {
+            prepass(file.path, t, compilationMode, file.code);
         },
+    });
+}
+
+/**
+ * Rewrites only the functions the compiler compiles (see `compiledRoots`), about a third of a Kotlin/JS module, and
+ * returns them. Every step and every scope crawl stays inside them; a crawl resets the scopes it enters.
+ */
+export function prepass(program: any, t: any, compilationMode: CompilationMode, code: string, calls?: (call: any) => void): any[] {
+    const roots = compiledRoots(program, t, compilationMode, code);
+    aliasSyntheticImports(program, t);
+    renameSyntheticHelpers(program);
+    const destructured = { any: false };
+    const firstPass = {
+        ...(BIGINT_LITERAL.test(code) && {
+            // The compiler has no lowering for BigInt literals (Kotlin `Long`); the string keeps 64-bit precision.
+            BigIntLiteral: (path: any) => void path.replaceWith(t.callExpression(t.identifier('BigInt'), [t.stringLiteral(path.node.value)])),
+        }),
+        ...(STATE_HOOK_NAME.test(code) && { BlockStatement: destructureStateHooks(program, t, destructured) }),
+        ...((calls || code.includes(EMPTY_OBJECT_CALL)) && {
+            CallExpression(call: any) {
+                if (isEmptyObjectCall(call, t)) call.replaceWith(t.objectExpression([]));
+                else calls?.(call);
+            },
+        }),
     };
+    if (Object.keys(firstPass).length > 0) for (const root of roots) root.traverse(firstPass);
+    // Only a rewritten state hook moves bindings the steps below read.
+    if (destructured.any) for (const root of roots) root.scope.crawl();
+    for (const root of roots) blockScopeVars(root, t);
+    for (const root of roots) root.scope.crawl();
+    for (const root of roots) {
+        forEachFunction(root, (fn: any) => {
+            rewriteDefaultParams(fn, t);
+            destructurePropsRef(fn, t);
+        });
+    }
+    for (const root of roots) uniqueBindingNames(root);
+    return roots;
+}
+
+/**
+ * What holds the functions React Compiler compiles. In `annotation` mode, the outermost functions of the module's
+ * statements whose source has a memo directive, nested ones included (a component a factory function creates), opt-outs
+ * included (the compiler still checks them); in the other modes, the whole program.
+ */
+function compiledRoots(program: any, t: any, compilationMode: CompilationMode, code: string): any[] {
+    const hoist = (fn: any) => void hoistMemoDirectives(fn, t);
+    if (compilationMode !== 'annotation') {
+        program.traverse({ Function: hoist });
+        return [program];
+    }
+    const directives = [...code.matchAll(MEMO_DIRECTIVE_TEXT)].map((match) => match.index);
+    const hasDirective = (node: any) => directives.some((index) => index >= node.start && index < node.end);
+    const roots: any[] = [];
+    for (const statement of program.get('body')) {
+        if (!hasDirective(statement.node)) continue;
+        if (statement.isFunction()) roots.push(statement);
+        else statement.traverse({ Function: (fn: any) => void (hasDirective(fn.node) && roots.push(fn), fn.skip()) });
+    }
+    for (const root of roots) forEachFunction(root, hoist);
+    return roots;
+}
+
+/**
+ * `Object()`, which kotlin-react-compiler after 1.0.8 starts props objects with (the Kotlin compiler parses a
+ * `js("({})")` at every call): React Compiler memoizes `{}` better, as a value it creates.
+ */
+function isEmptyObjectCall(call: any, t: any): boolean {
+    const { callee, arguments: args } = call.node;
+    return args.length === 0 && t.isIdentifier(callee, { name: 'Object' }) && !call.scope.getBinding('Object');
+}
+
+/** Calls `visit` with `root` when it is a function, then with every function inside it. */
+function forEachFunction(root: any, visit: (fn: any) => void) {
+    if (root.isFunction()) visit(root);
+    root.traverse({ Function: visit });
 }
 
 /**
@@ -51,27 +114,35 @@ export function babelPrepass({ types: t }: { types: any }) {
  * pushing `"use memo"` / `"use no memo"` below them, where they are plain expression statements instead of directives.
  * Both move back, in order: an opt-out follows the `"use memo"` the Kotlin plugin puts before it.
  */
-function hoistMemoDirectives(program: any, t: any) {
-    program.traverse({
-        Function(fn: any) {
-            if (!t.isBlockStatement(fn.node.body)) return;
-            for (const statement of fn.get('body.body')) {
-                const { expression } = statement.node;
-                if (!statement.isExpressionStatement() || !t.isStringLiteral(expression) || !MEMO_DIRECTIVES.has(expression.value)) continue;
-                fn.node.body.directives.push(t.directive(t.directiveLiteral(expression.value)));
-                statement.remove();
-            }
-        },
-    });
+function hoistMemoDirectives(fn: any, t: any) {
+    if (!t.isBlockStatement(fn.node.body)) return;
+    for (const statement of fn.get('body.body')) {
+        const { expression } = statement.node;
+        if (!statement.isExpressionStatement() || !t.isStringLiteral(expression) || !MEMO_DIRECTIVES.has(expression.value)) continue;
+        fn.node.body.directives.push(t.directive(t.directiveLiteral(expression.value)));
+        statement.remove();
+    }
 }
 
 /** `useFoo$lambda` → `_useFoo$lambda`, for top-level functions only: imported names are `aliasSyntheticImports`'. */
 function renameSyntheticHelpers(program: any) {
     for (const [name, binding] of Object.entries<any>(program.scope.bindings)) {
         if (binding.kind === 'hoisted' && SYNTHETIC_HELPER.test(name) && !program.scope.hasBinding(`_${name}`)) {
-            program.scope.rename(name, `_${name}`);
+            renameThroughReferences(program.scope, binding, `_${name}`);
         }
     }
+}
+
+/**
+ * `scope.rename` without its walk over the whole module: the crawl recorded every reference of a module function.
+ * Kotlin/JS neither reassigns one nor puts one in a shorthand property, the two cases the walk also handles.
+ */
+function renameThroughReferences(scope: any, binding: any, name: string) {
+    delete scope.bindings[binding.identifier.name];
+    binding.identifier.name = name;
+    for (const reference of binding.referencePaths) reference.node.name = name;
+    scope.bindings[name] = binding;
+    scope.references[name] = true;
 }
 
 /**
@@ -80,51 +151,51 @@ function renameSyntheticHelpers(program: any) {
  * Indexed, the setter is not known to be stable, and the compiler cannot preserve a `useCallback` depending on it.
  * Each name must be declared once and used only inside the block, where a `let` means what the `var` did.
  */
-function destructureStateHooks(program: any, t: any) {
+function destructureStateHooks(program: any, t: any, destructured: { any: boolean }) {
     const isStateHookCall = (node: any) => t.isCallExpression(node) && importedFromReact(program, node.callee, STATE_HOOKS, t);
-    program.traverse({
-        BlockStatement(block: any) {
-            const owner = block.getFunctionParent();
-            if (!owner) return;
-            const keepsMeaningAsLet = (name: string) => {
-                const binding = owner.scope.getBinding(name);
-                return binding?.kind === 'var' &&
-                    binding.scope === owner.scope &&
-                    binding.constantViolations.length === 0 &&
-                    binding.referencePaths.every((use: any) => use.isDescendant(block));
-            };
-            const statements = block.get('body');
-            for (let i = 0; i < statements.length; i++) {
-                const head = singleDeclarator(statements[i].node, t);
-                if (!head?.init) continue;
+    return (block: any) => {
+        const owner = block.getFunctionParent();
+        if (!owner) return;
+        const keepsMeaningAsLet = (name: string) => {
+            const binding = owner.scope.getBinding(name);
+            return binding?.kind === 'var' &&
+                binding.scope === owner.scope &&
+                binding.constantViolations.length === 0 &&
+                binding.referencePaths.every((use: any) => use.isDescendant(block));
+        };
+        const statements = block.get('body');
+        for (let i = 0; i < statements.length; i++) {
+            const head = singleDeclarator(statements[i].node, t);
+            if (!head?.init) continue;
 
-                const single = indexedAccess(head.init, t);
-                if (single?.index === 0 && isStateHookCall(single.target) && keepsMeaningAsLet(head.id.name)) {
-                    head.init = single.target;
-                    head.id = t.arrayPattern([head.id]);
-                    statements[i].node.kind = 'let';
-                    continue;
-                }
-
-                if (!isStateHookCall(head.init)) continue;
-                const value = singleDeclarator(statements[i + 1]?.node, t);
-                const setter = singleDeclarator(statements[i + 2]?.node, t);
-                if (
-                    readsIndex(value, head.id.name, 0, t) &&
-                    readsIndex(setter, head.id.name, 1, t) &&
-                    !readsBinding(statements.slice(i + 3).map((path: any) => path.node), head.id.name, t) &&
-                    keepsMeaningAsLet(value.id.name) &&
-                    keepsMeaningAsLet(setter.id.name)
-                ) {
-                    head.id = t.arrayPattern([value.id, setter.id]);
-                    statements[i].node.kind = 'let';
-                    statements[i + 1].remove();
-                    statements[i + 2].remove();
-                    i += 2;
-                }
+            const single = indexedAccess(head.init, t);
+            if (single?.index === 0 && isStateHookCall(single.target) && keepsMeaningAsLet(head.id.name)) {
+                head.init = single.target;
+                head.id = t.arrayPattern([head.id]);
+                statements[i].node.kind = 'let';
+                destructured.any = true;
+                continue;
             }
-        },
-    });
+
+            if (!isStateHookCall(head.init)) continue;
+            const value = singleDeclarator(statements[i + 1]?.node, t);
+            const setter = singleDeclarator(statements[i + 2]?.node, t);
+            if (
+                readsIndex(value, head.id.name, 0, t) &&
+                readsIndex(setter, head.id.name, 1, t) &&
+                !readsBinding(statements.slice(i + 3).map((path: any) => path.node), head.id.name, t) &&
+                keepsMeaningAsLet(value.id.name) &&
+                keepsMeaningAsLet(setter.id.name)
+            ) {
+                head.id = t.arrayPattern([value.id, setter.id]);
+                statements[i].node.kind = 'let';
+                statements[i + 1].remove();
+                statements[i + 2].remove();
+                destructured.any = true;
+                i += 2;
+            }
+        }
+    };
 }
 
 function importedFromReact(program: any, callee: any, names: Set<string>, t: any): boolean {
@@ -197,13 +268,15 @@ function readsName(node: any, name: string, t: any): boolean {
  *
  * Delete once the plugin requires Kotlin 2.5.20, which emits `let` / `const` itself (KT-64348).
  */
-function blockScopeVars(program: any, t: any) {
+function blockScopeVars(root: any, t: any) {
     const declaratorsByOwner = new Map<any, Map<string, any[]>>();
     const patternDeclarations = new Set<any>();
-    program.traverse({
+    const declarations: any[] = [];
+    root.traverse({
         VariableDeclaration(declaration: any) {
             const owner = declaration.getFunctionParent()?.node;
             if (declaration.node.kind !== 'var' || !owner) return;
+            declarations.push(declaration);
             for (const declarator of declaration.get('declarations')) {
                 if (!declarator.get('id').isIdentifier()) {
                     patternDeclarations.add(declaration.node);
@@ -232,14 +305,9 @@ function blockScopeVars(program: any, t: any) {
         }
     }
 
-    program.traverse({
-        VariableDeclaration(declaration: any) {
-            const { node } = declaration;
-            if (node.kind === 'var' && !patternDeclarations.has(node) && node.declarations.every((d: any) => asLet.has(d))) {
-                node.kind = 'let';
-            }
-        },
-    });
+    for (const { node } of declarations) {
+        if (!patternDeclarations.has(node) && node.declarations.every((d: any) => asLet.has(d))) node.kind = 'let';
+    }
     for (const { owner, name, declarators } of hoists) {
         for (const declarator of declarators) {
             const { init } = declarator.node;
@@ -440,19 +508,18 @@ function propsRefReads(binding: any, t: any): any[] {
  * (`HIRBuilder.resolveBinding`), while Kotlin/JS names its temporaries exactly that way (`tmp`, `tmp_0`): a bail-out
  * then leaves two `let tmp_0` declarations behind, and a successful compile silently merges two variables into one.
  */
-function uniqueBindingNames(program: any) {
-    program.traverse({
-        Function(fn: any) {
-            const scopes = new Set([fn.scope]);
-            fn.traverse({ Scopable: (path: any) => void scopes.add(path.scope) });
-            const names = new Set<string>();
-            for (const scope of scopes) {
-                for (const name of Object.keys(scope.bindings)) {
-                    if (names.has(name)) scope.rename(name);
-                    else names.add(name);
-                }
-            }
-            fn.skip();
-        },
-    });
+function uniqueBindingNames(root: any) {
+    if (!root.isFunction()) {
+        root.traverse({ Function: (fn: any) => void (uniqueBindingNames(fn), fn.skip()) });
+        return;
+    }
+    const scopes = new Set([root.scope]);
+    root.traverse({ Scopable: (path: any) => void scopes.add(path.scope) });
+    const names = new Set<string>();
+    for (const scope of scopes) {
+        for (const name of Object.keys(scope.bindings)) {
+            if (names.has(name)) scope.rename(name);
+            else names.add(name);
+        }
+    }
 }

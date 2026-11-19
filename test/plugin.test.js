@@ -21,29 +21,29 @@ export {
   get_App as get_App1a2b3c,
 };`;
 
-    test('run Fast Refresh before the compiler, on the dev server only', () => {
+    test('run Fast Refresh before the compiler, on the dev server only', async () => {
         assert.deepEqual([fastRefresh.name, compiler.name], ['vite:react-plugin-kotlinjs', 'kotlin-react-compiler']);
         assert.equal(fastRefresh.apply, 'serve');
         assert.equal(compiler.apply, undefined);
     });
 
-    test('keep the Fast Refresh rename through the compiler', () => {
+    test('keep the Fast Refresh rename through the compiler', async () => {
         const refreshed = fastRefresh.transform.handler(component, 'App.mjs').code;
-        const { code, map } = compiler.transform.handler(refreshed, 'App.mjs');
+        const { code, map } = await compiler.transform.handler(refreshed, 'App.mjs');
         assert.match(code, /function GetApp\(\) \{[\s\S]*GetApp as get_App1a2b3c[\s\S]*react\/jsx-dev-runtime/);
         assert.match(code, /react\/compiler-runtime/);
         assert.ok(map.mappings.length > 0);
     });
 
-    test('pass the compiler events of a module to the logger', () => {
+    test('pass the compiler events of a module to the logger', async () => {
         const logged = [];
         const logger = { logEvent: (filename, event) => logged.push(`${filename}: ${event.kind}`) };
         const [, withLogger] = reactKotlinJs({ reactCompiler: { logger } });
-        withLogger.transform.handler(component, 'App.mjs');
+        await withLogger.transform.handler(component, 'App.mjs');
         assert.deepEqual(logged, ['App.mjs: CompileSuccess']);
     });
 
-    test('load in a project without the compiler toolchain', () => {
+    test('load in a project without the compiler toolchain', async () => {
         // Nothing can be resolved from this project: neither Babel nor the compiler.
         const project = fs.mkdtempSync(path.join(os.tmpdir(), 'kotlinjs-project-'));
         fs.writeFileSync(path.join(project, 'package.json'), '{}');
@@ -58,7 +58,7 @@ export {
 describe('fast refresh plugin', () => {
     const [fastRefresh] = reactKotlinJs();
 
-    test('renames the component getter and switches to the dev JSX runtime', () => {
+    test('renames the component getter and switches to the dev JSX runtime', async () => {
         const input = `import { jsx } from 'react/jsx-runtime';
 function get_App() {
   return App;
@@ -72,7 +72,7 @@ export {
         );
     });
 
-    test('recognizes lowered components importing kotlin-react/react/jsx/runtime/jsx.mjs', () => {
+    test('recognizes lowered components importing kotlin-react/react/jsx/runtime/jsx.mjs', async () => {
         const input = `import { jsx2uf3lx2x6pvok as jsx } from '../../../../kotlin-react/react/jsx/runtime/jsx.mjs';
 function get_SidebarButton() {
   return SidebarButton;
@@ -86,7 +86,7 @@ export {
         );
     });
 
-    test('renames references to the getter inside its module, but not the export alias', () => {
+    test('renames references to the getter inside its module, but not the export alias', async () => {
         const input = `import { jsx } from 'react/jsx-runtime';
 function get_Tree() {
   return Tree;
@@ -103,7 +103,7 @@ export {
         assert.match(code, /GetTree as get_Tree,/);
     });
 
-    test('skips modules without a component getter', () => {
+    test('skips modules without a component getter', async () => {
         assert.equal(fastRefresh.transform.handler('export {};', 'Plain.mjs'), null);
     });
 

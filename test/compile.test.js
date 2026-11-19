@@ -233,9 +233,28 @@ function Mutating$lambda(holder) {
         assert.doesNotMatch(code, /_ref/);
     });
 
+    test("memoizes kotlin-react-compiler's Object() props as the {} they create", () => {
+        const props = (init) => `import { jsx } from 'react/jsx-runtime';
+export function Card(props) {
+  'use memo';
+  var attrs = ${init};
+  attrs.title = props.title;
+  var Object_0 = props.object;
+  return jsx('div', attrs);
+}`;
+        assert.equal(compileKotlinMjs(props('Object()')).code, compileKotlinMjs(props('{}')).code);
+    });
+
+    test('compiles a function kotlin-react-compiler marks with __krcUseMemo()', () => {
+        const { code, events } = compileKotlinMjs(doWhileVar.replace("  'use memo';", '  __krcUseMemo();'));
+        assert.deepEqual(events.map((e) => e.kind), ['CompileSuccess']);
+        assert.doesNotMatch(code, /__krcUseMemo/);
+    });
+
     test('rewrites VOID default arguments with collision-free parameter names', () => {
-        // Without "use memo" nothing is compiled in annotation mode, so the output is the Babel pre-pass alone.
+        // Opted out, the functions go through the Babel pre-pass but are not compiled, so the output is the pre-pass alone.
         const { code } = compileKotlinMjs(`function useTimeout(x, _x, delay) {
+  'use no memo';
   x = x === VOID ? 1 : x;
   if (delay === VOID) {
     delay = 500;
@@ -243,15 +262,20 @@ function Mutating$lambda(holder) {
   return x + _x + delay;
 }
 function useSelf(x) {
+  'use no memo';
   x = x === VOID ? f(x) : x;
   return x;
 }`);
         assert.equal(code, `function useTimeout(_x2, _x, _delay) {
+  'use no memo';
+
   let x = _x2 === VOID ? 1 : _x2;
   let delay = _delay === VOID ? 500 : _delay;
   return x + _x + delay;
 }
 function useSelf(x) {
+  'use no memo';
+
   x = x === VOID ? f(x) : x;
   return x;
 }`);

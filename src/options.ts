@@ -32,6 +32,11 @@ export interface ReactCompilerOptions {
     logger?: { logEvent: (filename: string, event: ReactCompilerEvent) => void };
 }
 
+/** What the plugin passes the compiler besides the user's options: `sourceMaps: false` where nothing reads them. */
+export interface CompileOptions extends ReactCompilerOptions {
+    sourceMaps?: boolean;
+}
+
 export interface Options {
     include?: Array<string | RegExp>;
     isReactFC?: (code: string) => boolean;
